@@ -21,15 +21,15 @@ def split_pair_names(filenames, base_dir):
 
 
 class DataParser():
-    def __init__(self, batch_size_train, lst_file, parent_folder, train_folder):
-        self.train_file = lst_file
-        self.train_data_dir = parent_folder
+    def __init__(self, batch_size_train):
+        self.train_file = os.path.join('./HED-stuff/', 'train_pair.lst')
+        self.train_data_dir = './train_station/'
         self.training_pairs = read_file_list(self.train_file)
         train_test_dir = split_pair_names(self.training_pairs, self.train_data_dir)
         self.samples = [(train_test_dir[0][0] + '/' + x, train_test_dir[0][1] + '/' + x) for x in os.listdir(train_test_dir[0][0])]
         
         
-        self.all_ids = os.listdir(train_folder)
+        self.all_ids = os.listdir('./train_station/train_images/')
         np.random.shuffle(self.all_ids)
         
         train_split = 0.8

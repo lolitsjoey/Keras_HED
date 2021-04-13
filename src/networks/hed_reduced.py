@@ -14,7 +14,7 @@ def side_branch(x, factor):
     return x
 
 
-def hed():
+def hed(weights_file):
     # Input
     img_input = Input(shape=(480,480,3), name='input')
 
@@ -37,43 +37,27 @@ def hed():
     b3= side_branch(x, 4) # 480 480 1
     x = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block3_pool')(x) # 60 60 256
 
-    # Block 4
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv1')(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv2')(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv3')(x)
-    b4= side_branch(x, 8) # 480 480 1
-    x = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block4_pool')(x) # 30 30 512
-
-    # Block 5
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv1')(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv2')(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv3')(x) # 30 30 512
-    b5= side_branch(x, 16) # 480 480 1
-
     # fuse
-    fuse = Concatenate(axis=-1)([b1, b2, b3, b4, b5])
+    fuse = Concatenate(axis=-1)([b1, b2, b3])
     fuse = Conv2D(1, (1,1), padding='same', use_bias=False, activation=None)(fuse) # 480 480 1
 
     # outputs
     o1    = Activation('sigmoid', name='o1')(b1)
     o2    = Activation('sigmoid', name='o2')(b2)
     o3    = Activation('sigmoid', name='o3')(b3)
-    o4    = Activation('sigmoid', name='o4')(b4)
-    o5    = Activation('sigmoid', name='o5')(b5)
     ofuse = Activation('sigmoid', name='ofuse')(fuse)
 
 
     # model
-    model = Model(inputs=[img_input], outputs=[o1, o2, o3, o4, o5, ofuse])
-    filepath = './model_dir/test_load.h5'
-    
-    load_weights_from_hdf5_group_by_name(model,filepath)
-    
+    model = Model(inputs=[img_input], outputs=[o1, o2, o3, ofuse])
+    filepath = weights_file
+    if os.path.isfile(filepath):
+        load_weights_from_hdf5_group_by_name(model, filepath)
+        print('weights loaded: {}'.format(weights_file))
+
     model.compile(loss={'o1': cross_entropy_balanced,
                         'o2': cross_entropy_balanced,
                         'o3': cross_entropy_balanced,
-                        'o4': cross_entropy_balanced,
-                        'o5': cross_entropy_balanced,
                         'ofuse': cross_entropy_balanced,
                         },
                   metrics={'ofuse': ofuse_pixel_error},
