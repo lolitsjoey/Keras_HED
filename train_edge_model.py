@@ -12,6 +12,7 @@ import cv2
 import matplotlib.pyplot as plt
 import random
 import albumentations as A
+import sys
 
 def generate_minibatches(dataParser, train=True):
     while True:
@@ -22,16 +23,15 @@ def generate_minibatches(dataParser, train=True):
         ims, ems, _ = dataParser.get_batch(batch_ids)
         yield(ims, [ems, ems, ems, ems])
 
-
 def augmentImage(image, n):
     aug = A.Compose([
         # A.Flip(p=0.25),
-        A.RandomGamma(gamma_limit=(20, 300), p=0.5),
-        A.RandomBrightnessContrast(p=0.6),
-        A.Rotate(limit=3, p=0.6),
+        A.RandomGamma(gamma_limit=(20, 300), p=0.15),
+        A.RandomBrightnessContrast(p=0.2),
+        A.Rotate(limit=3, p=0.4),
         # A.RandomRotate90(p=0.25),
         # A.RGBShift(p=0.75),
-        A.GaussNoise(p=0.25)
+        A.GaussNoise(p=0.12)
     ])
 
     outData = []
@@ -68,10 +68,21 @@ if __name__ == "__main__":
     model_dir     = os.path.join('checkpoints', model_name)
     csv_fn        = os.path.join(model_dir, 'train_log.csv')
     checkpoint_fn = os.path.join(model_dir, 'checkpoint.{epoch:02d}-{val_loss:.2f}.hdf5')
-    img_dir = './train_station/train_images/'
-    dest_dir = './adv_l2l_train_station/train_images/'
-    weights_dir = './model_dir/weights_of_reduced_edge.h5'
-    save_model_weights_to = './model_dir/weights_robust_lighting_texture.h5'
+    folder_with_train_images = './train_station/train_images/'
+    extra_texture_parent = './adv_l2l_train_station/'
+    extra_texture_images_to = extra_texture_parent + 'train_images/'
+    extra_texture_truth_to = extra_texture_parent + 'gnd_truth/'
+    load_weights_from = './model_dir/weights_of_reduced_edge.h5' # change this to gibberish if you
+                                                                 # wanna train from scratch
+    save_model_weights_to = './model_dir/weights_robust_lighting_texture_2.h5'
+    lst_with_folder_names = './HED-stuff/train_pair.lst'
+
+    if os.path.exists(save_model_weights_to):
+        response = input("Happy to overwrite {}?".format(save_model_weights_to.split))
+        if response == 'y':
+            pass
+        else:
+            sys.exit()
 
     # environment
     K.set_image_data_format('channels_last')
@@ -83,22 +94,22 @@ if __name__ == "__main__":
     # prepare images
     response = input("New Input Images?")
     if response == 'y':
-        add_texture('./train_station/train_images/', './adv_l2l_train_station/train_images/')
-        for img in os.listdir(dest_dir):
-            img_for_aug = cv2.imread(dest_dir + img)
+        add_texture(folder_with_train_images, extra_texture_images_to)
+        for img in os.listdir(extra_texture_images_to):
+            img_for_aug = cv2.imread(extra_texture_images_to + img)
             augList = augmentImage(img_for_aug, 7)
             for idx, augImage in enumerate(augList):
-                cv2.imwrite(dest_dir + img[0:-4] + '_{}.bmp'.format(idx + 1), augImage)
-                gnd_truth = cv2.imread('./adv_l2l_train_station/gnd_truth/' + img)
-                cv2.imwrite('./adv_l2l_train_station/gnd_truth/' + img[0:-4] + '_{}.bmp'.format(idx + 1), gnd_truth)
+                cv2.imwrite(extra_texture_images_to + img[0:-4] + '_{}.bmp'.format(idx + 1), augImage)
+                gnd_truth = cv2.imread(extra_texture_truth_to + img)
+                cv2.imwrite(extra_texture_truth_to + img[0:-4] + '_{}.bmp'.format(idx + 1), gnd_truth)
     else:
-        pass
+        print('Continuing with existing training set: {}'.format(extra_texture_images_to))
 
     batch_size_train = 10
-    dataParser = DataParser(batch_size_train, './HED-stuff/train_pair.lst', './adv_l2l_train_station/', './adv_l2l_train_station/train_images/')
+    dataParser = DataParser(batch_size_train, lst_with_folder_names, extra_texture_parent, extra_texture_images_to)
 
     # model
-    model = hed(weights_dir)
+    model = hed(load_weights_from)
     checkpointer = callbacks.ModelCheckpoint(filepath=checkpoint_fn, verbose=1, save_best_only=True)
     csv_logger  = callbacks.CSVLogger(csv_fn, append=True, separator=';')
     tensorboard = callbacks.TensorBoard(log_dir=model_dir, histogram_freq=2, batch_size = batch_size_train,
