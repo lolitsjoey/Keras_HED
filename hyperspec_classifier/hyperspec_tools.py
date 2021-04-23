@@ -79,8 +79,8 @@ def create_cwt_images(X, rescale_size, scales, wavelet_name="morl"):
     X_cwt = np.ndarray(shape=(n_samples, rescale_size, rescale_size, n_signals), dtype='float32')
 
     for sample in range(n_samples):
-        if sample % 1000 == 0:
-            print(sample)
+        if sample % 1000 == 999:
+            print('Converted {} Samples'.format(sample))
         for signal in range(n_signals):
             serie = X[sample, :, signal]
             # continuous wavelet transform
@@ -92,7 +92,7 @@ def create_cwt_images(X, rescale_size, scales, wavelet_name="morl"):
 
     return X_cwt
 
-def build_cnn_model(activation, input_shape):
+def build_cnn_model(activation, input_shape, num_classes):
     model = Sequential()
 
     # 2 Convolution layer with Max polling
@@ -107,7 +107,7 @@ def build_cnn_model(activation, input_shape):
     # 3 Full connected layer
     model.add(Dense(128, activation=activation, kernel_initializer="he_normal"))
     model.add(Dense(54, activation=activation, kernel_initializer="he_normal"))
-    model.add(Dense(6, activation='softmax'))  # 6 classes
+    model.add(Dense(num_classes, activation='softmax'))  # 6 classes
 
     # summarize the model
     print(model.summary())

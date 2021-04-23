@@ -193,12 +193,13 @@ def write_hyper_spec(folder_of_folders, hyperspec_destination, num_segs, fileStr
         plt.show()
         '''
         if fileString == 'genuine':
-            hsFront = HyperSpecImage(frontHDR, frontRAW, rotation=270, hFlip=False, vFlip=True)
+            #hsFront = HyperSpecImage(frontHDR, frontRAW, rotation=270, hFlip=False, vFlip=True)
+            hsFront = HyperSpecImage(frontHDR, frontRAW, rotation=90, hFlip=True, vFlip=True)
         else:
             hsFront = HyperSpecImage(frontHDR, frontRAW, rotation=0, hFlip=True, vFlip=True)
         hsFront.cropAndStraighten()
 
-        hsSample = np.array([hsFront.array[260:395, 660:820,i] for i in range(0,224)]).transpose((1,2,0))
+        hsSample = np.array([hsFront.array[:, :,i] for i in range(0,224)]).transpose((1,2,0))
 
         arrMod = flattenHSToDataFrame(hsSample)
         labels = runKMeans(arrMod, num_segs)

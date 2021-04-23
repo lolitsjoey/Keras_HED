@@ -13,36 +13,40 @@ import pandas as pd
 from hyperspec_classifier.hyperspec_writer import write_hyper_spec
 
 
-def get_batches(hyperspec_destination, wavelet, batch_size, scales,  plot = False):
+def get_batches(hyperspec_destination, wavelet, batch_size, scales, num_segs, plot = False):
     search_string = 'genuine'
-    seg1, seg2, seg3 = parse_hyperspec_lists(hyperspec_destination, search_string, plot = plot)
-    seg1, seg2, seg3 = listToArray([seg1, seg2, seg3])
-
-    seg1Labels = [0] * len(seg1)
-    seg2Labels = [1] * len(seg2)
-    seg3Labels = [2] * len(seg3)
+    #TODO dictionary style needs to be done.
+    gen_segs = parse_hyperspec_lists(hyperspec_destination, search_string, num_segs, plot = plot)
+    gen_labels = []
+    for idx, seg in enumerate(gen_segs.keys()):
+        gen_labels = gen_labels + [num_segs - int(str(seg).split(' ')[-1])]
 
     search_string = 'counterfeit'
-    cft_seg1, cft_seg2, cft_seg3 = parse_hyperspec_lists(hyperspec_destination, search_string, plot = plot)
-    cft_seg1, cft_seg2, cft_seg3 = listToArray([cft_seg1, cft_seg2, cft_seg3])
+    cft_segs = parse_hyperspec_lists(hyperspec_destination, search_string, num_segs, plot = plot)
+    cft_labels = []
+    for idx, seg in enumerate(cft_segs.keys()):
+        cft_labels = cft_labels + [num_segs - int(str(seg).split(' ')[-1]) + max(gen_labels) + 1]
 
-    cft_seg1Labels = [3] * len(cft_seg1)
-    cft_seg2Labels = [4] * len(cft_seg2)
-    cft_seg3Labels = [5] * len(cft_seg3)
-    allSegs = np.vstack((seg1, seg2, seg3, cft_seg1, cft_seg2, cft_seg3))
-    allLabels = seg1Labels + seg2Labels + seg3Labels + cft_seg1Labels + cft_seg2Labels + cft_seg3Labels
+    all_labels = np.array(gen_labels + cft_labels)
+    all_segs = np.full((len(all_labels),224),0, dtype=float)
+    for idx,seg in enumerate(gen_segs):
+        all_segs[idx,:] = gen_segs[seg]
+    final_idx = idx
+    for idx,seg in enumerate(cft_segs):
+        all_segs[idx + final_idx + 1,:] = cft_segs[seg]
 
-    X_train, X_test, y_train, y_test = train_test_split(allSegs, allLabels, test_size=0.2, random_state=42)
-    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+    all_segs = all_segs[:,:,None]
+    x_train, x_test, y_train, y_test = train_test_split(all_segs, all_labels, test_size=0.2, random_state=42)
+    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.2, random_state=42)
 
     # amount of pixels in X and Y
     rescale_size = 64
     # determine the max scale size
     n_scales = 64
 
-    x_train_cwt = create_cwt_images(X_train, rescale_size, scales,  wavelet)
-    x_test_cwt = create_cwt_images(X_test, rescale_size,  scales, wavelet)
-    x_val_cwt = create_cwt_images(X_val, rescale_size, scales, wavelet)
+    x_train_cwt = create_cwt_images(x_train, rescale_size, scales,  wavelet)
+    x_test_cwt = create_cwt_images(x_test, rescale_size,  scales, wavelet)
+    x_val_cwt = create_cwt_images(x_val, rescale_size, scales, wavelet)
     train_batches = Inline_Generator(x_train_cwt, y_train, batch_size)
     test_batches = Inline_Generator(x_test_cwt, y_test, batch_size)
     val_batches = Inline_Generator(x_val_cwt, y_val, batch_size)

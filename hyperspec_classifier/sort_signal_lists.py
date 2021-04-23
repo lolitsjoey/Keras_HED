@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 import math
 import numpy as np
 
-def parse_hyperspec_lists(dir, search_string, plot = False):
-    seg1 = []
-    seg2 = []
-    seg3 = []
+def parse_hyperspec_lists(dir, search_string, num_segs, plot = False):
+
+    dictOfSegs = {}
+
     list_of_folders = [i for i in os.listdir(dir) if search_string in i]
     for count, signal in enumerate(list_of_folders):
         with open(dir + signal, 'r+') as rf:
@@ -19,17 +19,15 @@ def parse_hyperspec_lists(dir, search_string, plot = False):
             joinString = joinString + test[line].replace('[', '').replace('. ',' ').replace(']','')
 
         parsed = [float(item) for item in joinString.split()]
-        if count % 3 == 0:
+        if count % num_segs == 0:
             crit = [max(parsed)]
-            index = count % 3
             saveHistory = [parsed]
         else:
             crit = crit + [max(parsed)]
             saveHistory = saveHistory + [parsed]
-        if count % 3 == 2:
-            seg3.append(saveHistory[np.argsort(crit)[0]])
-            seg2.append(saveHistory[np.argsort(crit)[1]])
-            seg1.append(saveHistory[np.argsort(crit)[2]])
+        if count % num_segs == num_segs-1:
+            for i in range(num_segs):
+                dictOfSegs['{} seg {}'.format(int((count + 1)/num_segs),num_segs - i)] = saveHistory[np.argsort(crit)[i]]
 
         x = list(range(0,224))
         if plot:
@@ -47,4 +45,4 @@ def parse_hyperspec_lists(dir, search_string, plot = False):
             plt.plot(x,item)
         plt.show()
 
-    return seg1, seg2, seg3
+    return dictOfSegs

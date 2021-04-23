@@ -154,3 +154,4 @@ model_dir/trained_on_shoes/variables/variables.data-00000-of-00001
 model_dir/trained_on_shoes/variables/variables.index
 *.csv
 *.csv
+*.csv

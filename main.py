@@ -8,7 +8,7 @@ from test_edge_model import tool_this_folder
 
 from classifier.train_edge_classifier import classify_build_conv, prepare_data, grab_batches_with_generator
 from classifier.test_edge_classifier import get_dense_output, get_dense_output_no_images
-from classifier.score_from_network import score_notes_from_network, write_out_scores
+from classifier.score_from_network import score_notes_from_network, write_out_scores, write_out_scores_noimages
 
 from hyperspec_classifier.hyperspec_classifier import get_batches, compile_and_fit_model
 from hyperspec_classifier.hyperspec_tools import build_cnn_model
@@ -29,28 +29,28 @@ save_classifier_weights_to = './model_dir/classifiers/classify_conv_fed_seal_ttt
 
 #''' # CWT ---
 #load_classifier_weights_dir = './hyperspec_classifier/learning_to_learn_save.h5'
-load_classifier_weights_dir = './hyperspec_classifier/gibberish.h5
-save_classifier_weights_to = './hyperspec_classifier/learning_to_learn_save_4_secs.h5'
+load_classifier_weights_dir = './hyperspec_classifier/gibberish.h5'
+save_classifier_weights_to = './hyperspec_classifier/learning_to_learn_cwt_inkwell.h5'
 #''' #CWT ---
 
 
-retrain_classifier = False
+retrain_classifier = True
 
-save_score_model_weights_to = './GAM_model/models/joey_save_test_cwt'
+save_score_model_weights_to = './GAM_model/models/joey_cwt_inkwell_score'
 load_score_model_weights_dir = './gibberish.pkl'
 retrain_scoremodel = True
 
 rgb_image_feat = 'D:/FRNLib/federal seals/all/'
 layer_name = 'dense_1'
 batchSize = 10
-epochs = 10
+epochs = 40
 
 
 #morl is best so far, gaus3 is interesting, gaus6 is the best for offset distinguish, gaus7/gaus8 scores the best consistently
 wavelet = 'mexh'  # mother wavelet
 scales = np.arange(1, 65, 0.25)  # range of scales
 num_segs = 4
-rewrite_hyperspec = True
+rewrite_hyperspec = False
 hyperspec_destination = './hyperspec_classifier/hyperspec_inkwell/'
 
 def cwt():
@@ -66,11 +66,11 @@ def cwt():
 
 
 
-    x_train_cwt, x_test_cwt, x_val_cwt, y_train, y_test, y_val, train_batches, test_batches, val_batches = get_batches(hyperspec_destination, wavelet, 10, scales)
+    x_train_cwt, x_test_cwt, x_val_cwt, y_train, y_test, y_val, train_batches, test_batches, val_batches = get_batches(hyperspec_destination, wavelet, batchSize, scales, num_segs)
 
     input_shape = (x_train_cwt.shape[1], x_train_cwt.shape[2], x_train_cwt.shape[3])
     # create cnn model
-    cnn_model = build_cnn_model("relu", input_shape)
+    cnn_model = build_cnn_model("relu", input_shape, len(np.unique(y_test)))
     # train cnn model
     trained_cnn_model, cnn_history = compile_and_fit_model(cnn_model, train_batches, val_batches, 5)
     trained_cnn_model.save_weights(save_classifier_weights_to)
@@ -122,8 +122,10 @@ dense_output = pd.DataFrame(columns=range(n_dense_neurons), index=range(len(x_al
 dense_output = get_dense_output_no_images(dense_output, x_all, y_all, model, layer_name, binary = False, write = True)
 
 ordered_scores, ordered_labels, arguments, ordered_truth = score_notes_from_network(dense_output,
+                                                                                    genuine_classes = [0,1,2,3],
                                                                                     load= not retrain_scoremodel,
                                                                                     number_of_searches=10000,
                                                                                     save_name=save_score_model_weights_to)
-write_out_scores(ordered_scores, ordered_labels, arguments, ordered_truth, images_scored=hyperspec_destination + 'cwt/', rgb_dir=hyperspec_destination + 'rgb/')
+#write_out_scores(ordered_scores, ordered_labels, arguments, ordered_truth, genuine_classes = [0,1,2,3],images_scored=hyperspec_destination + 'cwt/', rgb_dir=hyperspec_destination + 'rgb/')
+write_out_scores_noimages(ordered_scores, ordered_labels, arguments, ordered_truth, array_scored=x_all, genuine_classes = [0,1,2,3])
 #'''

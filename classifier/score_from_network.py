@@ -15,8 +15,9 @@ from sklearn.linear_model import LogisticRegression
 
 def save_model(save_name, rand_gam, pca):
     if os.path.exists(save_name):
-        print('Save Path already existes, appending (new)')
-        os.makedirs(save_name + '_new')
+        suffix = str(uuid.uuid4())[0:5]
+        print('Save Path already exists, appending ({})'.format(suffix))
+        os.makedirs(save_name + '_' + str(suffix))
     else:
         os.makedirs(save_name)
 
@@ -28,10 +29,10 @@ def save_model(save_name, rand_gam, pca):
 
 def load_model(save_name):
     with open(save_name + '/' + save_name.split('/')[-1] + '_model', 'r') as f:
-        rand_gam = pickle.load(rand_gam, f)
+        rand_gam = pickle.load(f)
 
     with open(save_name + '/' + save_name.split('/')[-1] + '_pca', 'r') as f:
-        pca = pickle.load(pca, f)
+        pca = pickle.load(f)
 
     return rand_gam, pca
 
@@ -172,7 +173,9 @@ def score_notes_from_network(csv_dir, number_of_searches = 5000, pca_quality = 0
         if genuine_classes is None:
             genuine_classes = np.arange(0, num_classes / 2)
 
-        class_guess = np.argmax(scores_pre, axis=1)
+        #TODO MAYBE SOME CLEVER ENSEMBLE CHOICE HERE
+        #class_guess = np.argmax(scores_pre, axis=1)
+        class_guess = np.array(pred_y)
         scores = []
         for idx, clss in enumerate(class_guess):
             if clss in genuine_classes:
@@ -203,7 +206,7 @@ def score_notes_from_network(csv_dir, number_of_searches = 5000, pca_quality = 0
 
     return ordered_scores, ordered_labels, arguments, np.array(y)[arguments]
 
-def write_out_scores(scores, y, scr_order, truth, imShape = (480, 480),  images_scored='./pl_train_station/output_hed_images/',
+def write_out_scores(scores, y, scr_order, truth, imShape = (480, 480), genuine_classes = None,  images_scored='./pl_train_station/output_hed_images/',
                      rgb_dir='./pl_train_station/pretty_good_set_input/'):
     dirList = [images_scored, rgb_dir]
     ordered_list = [[os.listdir(images_scored)[i] for i in scr_order]][0]
@@ -216,10 +219,17 @@ def write_out_scores(scores, y, scr_order, truth, imShape = (480, 480),  images_
     for i, img in enumerate(ordered_list):
         write_rgb(dirList, img, truth, scores, i)
 
-    genuine_scores = [scores[i] for i in range(len(scores)) if truth[i] == 1]
+    if genuine_classes is None:
+        genuine_classes = 1
+        cft_classes = 0
+    else:
+        classes = list(range(len(np.unique(truth))))
+        cft_classes = [i for i in classes if i not in genuine_classes]
+
+    genuine_scores = [scores[i] for i in range(len(scores)) if truth[i] in genuine_classes]
     print('lowest_scoring_genuine: {}: {}'.format(np.where(scores == min(genuine_scores))[0][0], min(genuine_scores)))
 
-    cft_scores = [scores[i] for i in range(len(scores)) if truth[i] == 0]
+    cft_scores = [scores[i] for i in range(len(scores)) if truth[i] in cft_classes]
     print('highest_scoring_counterfeit: {}: {}'.format(np.where(scores == max(cft_scores))[0][0], max(cft_scores)))
 
     cftBoolMask = [True if ii == 0 else False for ii in truth]
@@ -230,7 +240,43 @@ def write_out_scores(scores, y, scr_order, truth, imShape = (480, 480),  images_
     scoreBoolMask = (scores < max(cft_scores))
     write_transgressionals(genBoolMask, scoreBoolMask, 'gens')
 
+def write_out_scores_noimages(scores, y, scr_order, truth, array_scored, genuine_classes = None):
+    clean_directories()
 
+    # TODO change so actually uses genuine classes not just 0,1
+    for i, img in enumerate(array_scored[scr_order,:,:,:]):
+        old_value = img
+        old_min = np.min(img)
+        old_max = np.max(img)
+        new_min = 0
+        new_max = 256.
+        new_value = ((old_value - old_min) / (old_max - old_min)) * (new_max - new_min) + new_min
+        im_color = np.array(new_value, dtype = 'uint8')
+        im_color = cv2.applyColorMap(im_color, cv2.COLORMAP_HOT)
+        cv2.imwrite('./GAM_model/scored/edge/' + str(i) + '_' + str(truth[i]) + '_' + str(scores[i]) + '.jpg', im_color)
+
+
+
+    if genuine_classes is None:
+        genuine_classes = 1
+        cft_classes = 0
+    else:
+        classes = list(range(len(np.unique(truth))))
+        cft_classes = [i for i in classes if i not in genuine_classes]
+
+    genuine_scores = [scores[i] for i in range(len(scores)) if truth[i] in genuine_classes]
+    print('lowest_scoring_genuine: {}: {}'.format(np.where(scores == min(genuine_scores))[0][0], min(genuine_scores)))
+
+    cft_scores = [scores[i] for i in range(len(scores)) if truth[i] in cft_classes]
+    print('highest_scoring_counterfeit: {}: {}'.format(np.where(scores == max(cft_scores))[0][0], max(cft_scores)))
+
+    cftBoolMask = [True if ii == 0 else False for ii in truth]
+    scoreBoolMask = (scores > min(genuine_scores))
+    write_transgressionals(cftBoolMask, scoreBoolMask, 'cfts')
+
+    genBoolMask = [not i for i in cftBoolMask]
+    scoreBoolMask = (scores < max(cft_scores))
+    write_transgressionals(genBoolMask, scoreBoolMask, 'gens')
 
 if __name__ == '__main__':
     ordered_scores, ordered_labels, arguments, ordered_truth = score_notes_from_network('./intermediate_output.csv', number_of_searches=1000)
