@@ -9,6 +9,9 @@ def tool_this_folder(load_weights_from, test_images_in_this_folder, spit_edge_ma
         if '_edges' in img:
             continue
         read_img = cv2.imread(test_images_in_this_folder + img, 1)
-        resized_img = cv2.resize(read_img, (480, 480))
+        try:
+            resized_img = cv2.resize(read_img, (480, 480))
+        except Exception:
+            print(test_images_in_this_folder + img)
         predict_edge = model.predict(resized_img[None, :, :, :])
-        cv2.imwrite(spit_edge_maps_here + img[0:-4] + '_edges.bmp', predict_edge[0][0, :, :, 0] * 256)
+        cv2.imwrite(spit_edge_maps_here + img[0:-4] + '_edges.jpg', predict_edge[0][0, :, :, 0] * 256)

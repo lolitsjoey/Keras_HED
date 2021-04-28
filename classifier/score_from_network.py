@@ -12,26 +12,31 @@ import pickle
 import uuid
 from pygam.datasets import mcycle
 from sklearn.linear_model import LogisticRegression
+import decimal
+import math
+import warnings
 
 def save_model(save_name, rand_gam, pca):
     if os.path.exists(save_name):
         suffix = str(uuid.uuid4())[0:5]
         print('Save Path already exists, appending ({})'.format(suffix))
-        os.makedirs(save_name + '_' + str(suffix))
+        save_name = save_name + '_' + str(suffix)
+        os.makedirs(save_name)
     else:
         os.makedirs(save_name)
 
-    with open(save_name + '/' + save_name.split('/')[-1] + '_model', 'wb') as f:
+    with open(save_name + '/' + save_name.split('/')[-1] + '_model.pkl', 'wb') as f:
         pickle.dump(rand_gam, f)
 
-    with open(save_name + '/' + save_name.split('/')[-1] + '_pca', 'wb') as f:
+    with open(save_name + '/' + save_name.split('/')[-1] + '_pca.pkl', 'wb') as f:
         pickle.dump(pca, f)
+    return save_name
 
-def load_model(save_name):
-    with open(save_name + '/' + save_name.split('/')[-1] + '_model', 'r') as f:
+def load_model(load_name):
+    with open(load_name + '/' + load_name.split('/')[-1] + '_model.pkl', 'rb') as f:
         rand_gam = pickle.load(f)
 
-    with open(save_name + '/' + save_name.split('/')[-1] + '_pca', 'r') as f:
+    with open(load_name + '/' + load_name.split('/')[-1] + '_pca.pkl', 'rb') as f:
         pca = pickle.load(f)
 
     return rand_gam, pca
@@ -47,13 +52,39 @@ def prep_dataset(csv_dir):
     del dataset['prediction']
     return dataset, y, pred_y
 
-def transform_scores(scores, predictions):
+def decimal_from_value(value):
+    return decimal.Decimal(value)
+
+def learn_transform_scores(scores, predictions, load_name, save_name, load):
     transformed_scores = []
-    upper_b = max(scores) + (1 - max(scores)) * 0.1
-    lower_b = float(min(scores) / 1.2)
-    slope = (100 - 0) / (-np.log(1 / upper_b - 1) + np.log(1 / lower_b - 1))
-    for scr in scores:
-        transformed_scores.append(slope * (-np.log(1 / scr - 1) + np.log(1 / lower_b - 1)))
+    if load:
+        aaa = pd.read_csv(load_name + '/' + load_name.split('/')[-1] + '_extreme_scores.csv', converters={'bounds': decimal_from_value})
+        slope = (100 - 0)/(aaa.values[1][0] - aaa.values[0][0])
+        for scr in scores:
+            transformed_scores.append(round(slope * (- decimal.Decimal(1 / scr - 1).ln() - aaa.values[0][0]),3))
+    else:
+        lower_b = float(min(scores) / 1.2)
+        decimal.getcontext().prec = abs(int(math.floor(math.log10(lower_b)))) + 5
+        upper_b = float(max(scores) + (1 - max(scores)) * 0.1)
+
+        if upper_b == 1.0:
+            print('Log GAM or approximation almost definitly overfit')
+            upper_b = 1 - decimal.Decimal(lower_b)
+            scores = np.array(scores, dtype = decimal.Decimal)
+            scores[scores >= upper_b] = upper_b
+        try:
+            slope = (100 - 0) / (- decimal.Decimal(1/upper_b - 1).ln() + decimal.Decimal(1/lower_b - 1).ln())
+        except ZeroDivisionError:
+            print('Not this error again....')
+            print(upper_b)
+            print(lower_b)
+            pd.DataFrame(scores).to_csv('./GAM_model/scores.csv')
+        for scr in scores:
+            transformed_scores.append(round(slope * (- decimal.Decimal(1/scr - 1).ln() + decimal.Decimal(1/lower_b - 1).ln()),3))
+
+        scoring_df = pd.DataFrame([-decimal.Decimal(1 / lower_b - 1).ln(), - decimal.Decimal(1 / upper_b - 1).ln()])
+        scoring_df.columns = ['bounds']
+        scoring_df.to_csv(save_name + '/' + save_name.split('/')[-1] + '_extreme_scores.csv', index=False)
 
     arguments = np.argsort(transformed_scores)
     ordered_scores = np.array(transformed_scores)[arguments]
@@ -62,6 +93,7 @@ def transform_scores(scores, predictions):
     return ordered_scores, ordered_labels, arguments
 
 def create_rand_gam(number_of_searches, new_values, pred_y, y, pca_splines, pca_lam, pred_splines, pred_lam, pred_factor):
+    warnings.filterwarnings("ignore", category=RuntimeWarning)
     lams = np.random.rand(number_of_searches, new_values.shape[1] + 1)  # random points on [0, 1], with shape (1000, 3)
     lams = lams * 8 - 4  # shift values to -4, 4
     lams = 10 ** lams  # transforms values to 1e-4, 1e4
@@ -97,13 +129,13 @@ def print_stats(rand_gam, ordered_scores, ordered_labels, new_values, y):
     genuine_scores = [ordered_scores[i] for i in range(len(ordered_scores)) if ordered_labels[i] == 1]
     cft_scores = [ordered_scores[i] for i in range(len(ordered_scores)) if ordered_labels[i] == 0]
 
-    crit_genuine = min(genuine_scores)
-    crit_cft = max(cft_scores)
-
-    print('lowest_scoring_genuine: {}: {}'.format(np.where(ordered_scores == crit_genuine)[0][0],
-                                                  min(genuine_scores)))
-
-    print('highest_scoring_counterfeit: {}: {}'.format(np.where(ordered_scores == crit_cft)[0][0],
+    if genuine_scores:
+        crit_genuine = min(genuine_scores)
+        print('lowest_scoring_genuine: {}: {}'.format(np.where(ordered_scores == crit_genuine)[0][0],
+                                                      min(genuine_scores)))
+    if cft_scores:
+        crit_cft = max(cft_scores)
+        print('highest_scoring_counterfeit: {}: {}'.format(np.where(ordered_scores == crit_cft)[0][0],
                                                        max(cft_scores)))
     print('Model Accuracy: {}'.format(rand_gam.accuracy(new_values, y)))
 
@@ -126,8 +158,14 @@ def write_edge(dirList, img, imShape, truth, scores, i):
 def write_rgb(dirList, img, truth, scores, i):
     img = img[0:-10] + '.jpg'
     res_img = cv2.imread(dirList[1] + img)
-    cv2.imwrite('./GAM_model/scored/rgb/' + str(i) + '_' + str(truth[i]) + '_' + str(
-        scores[i]) + '.jpg', res_img)
+    try:
+        cv2.imwrite('./GAM_model/scored/rgb/' + str(i) + '_' + str(truth[i]) + '_' + str(
+            scores[i]) + '.jpg', res_img)
+    except Exception:
+        img = img[0:-4] + '.bmp'
+        res_img = cv2.imread(dirList[1] + img)
+        cv2.imwrite('./GAM_model/scored/rgb/' + str(i) + '_' + str(truth[i]) + '_' + str(
+            scores[i]) + '.jpg', res_img)
 
 def write_transgressionals(class_mask, score_mask, class_string):
     transgressional = [x and y for x, y in zip(class_mask, score_mask)]
@@ -145,11 +183,15 @@ def write_transgressionals(class_mask, score_mask, class_string):
 
 
 
-def score_notes_from_network(csv_dir, number_of_searches = 5000, pca_quality = 0.99, pca_splines = 20, pca_lam = 0.4, pred_lam = 0.02, pred_splines = 50,
-                             pred_factor=True, save_name=False, pca=False, load=False, genuine_classes = None):
+def score_notes_from_network(csv_dir, num_class = False, number_of_searches = 5000, pca_quality=0.99, pca_splines=20, pca_lam=0.4,
+                             pred_lam=0.02, pred_splines=50, pred_factor=True,
+                             save_name=False, pca=False, load=False, load_name=False, genuine_classes=None):
 
     dataset, y, pred_y = prep_dataset(csv_dir)
     num_classes = len(set(y))
+    #num_classes = 1
+    if load:
+        num_classes = num_class
 
     if not save_name:
         name = str(uuid.uuid4()) + '.pkl'
@@ -159,7 +201,9 @@ def score_notes_from_network(csv_dir, number_of_searches = 5000, pca_quality = 0
         pca = PCA(pca_quality)
         pca.fit(dataset)
     else:
-        rand_gam, pca = load_model(save_name)
+        if not load_name:
+            load_name = save_name
+        rand_gam, pca = load_model(load_name)
 
     new_values = pca.transform(dataset)
     print('Reduced to {}-dimensions'.format(str(new_values.shape[1])))
@@ -168,24 +212,35 @@ def score_notes_from_network(csv_dir, number_of_searches = 5000, pca_quality = 0
         print('WARNING: No multinomial GAM implementation in Python. Resorting to MultiNomial Regression')
         if not load:
             rand_gam = LogisticRegression(random_state=0, multi_class='multinomial', max_iter=10000).fit(new_values, y)
+
         scores_pre = rand_gam.predict_proba(new_values)
 
         if genuine_classes is None:
             genuine_classes = np.arange(0, num_classes / 2)
 
         #TODO MAYBE SOME CLEVER ENSEMBLE CHOICE HERE
-        #class_guess = np.argmax(scores_pre, axis=1)
+
+        class_guess = np.argmax(scores_pre, axis=1)
+        wrong_rows_log = [i for i in range(len(y)) if class_guess[i] != y[i]]
+
         class_guess = np.array(pred_y)
+        wrong_rows_classifier = [i for i in range(len(y)) if class_guess[i] != y[i]]
+
+
+        ii = np.array(wrong_rows_classifier)
+        print('Incorrect Rows Classifier: {}, the log has {}'.format(wrong_rows_classifier,  scores_pre[ii,np.array(y)[ii]]))
+        print('Incorrect Rows Logistic: {}'.format(wrong_rows_log))
+
         scores = []
         for idx, clss in enumerate(class_guess):
             if clss in genuine_classes:
                 scores.append(scores_pre[idx, clss])
             else:
                 scores.append(1 - scores_pre[idx, clss])
+        if not load:
+            save_model(save_name, rand_gam, pca)
 
-        save_model(save_name, rand_gam, pca)
-
-        ordered_scores, ordered_labels, arguments = transform_scores(scores, class_guess)
+        ordered_scores, ordered_labels, arguments = learn_transform_scores(scores, class_guess, load_name, save_name, load)
 
         return ordered_scores, ordered_labels, arguments, np.array(y)[arguments]
 
@@ -193,14 +248,21 @@ def score_notes_from_network(csv_dir, number_of_searches = 5000, pca_quality = 0
         rand_gam, new_values, titles = create_rand_gam(number_of_searches, new_values, pred_y, y,
                         pca_splines, pca_lam, pred_splines, pred_lam, pred_factor)
 
-    rand_gam.summary()
-    save_model(save_name, rand_gam, pca)
+        rand_gam.summary()
+        save_name = save_model(save_name, rand_gam, pca)
 
-    plot_variables(rand_gam, new_values, titles)
-
+        plot_variables(rand_gam, new_values, titles)
+    else:
+        new_values = np.append(new_values, np.array(pred_y).reshape(-1, 1), axis=1)
     scores = rand_gam.predict_proba(new_values)
     predictions = np.array(rand_gam.predict(new_values), dtype=np.int)
-    ordered_scores, ordered_labels, arguments = transform_scores(scores, predictions)
+    ordered_scores, ordered_labels, arguments = learn_transform_scores(scores, predictions, load_name, save_name, load)
+
+    titles = []
+    for i in range(new_values.shape[1] - 1):
+        titles.append(str(i))
+    titles.append('class_guess')
+    plot_variables(rand_gam, new_values, titles)
 
     print_stats(rand_gam, ordered_scores, ordered_labels, new_values, y)
 
@@ -220,25 +282,25 @@ def write_out_scores(scores, y, scr_order, truth, imShape = (480, 480), genuine_
         write_rgb(dirList, img, truth, scores, i)
 
     if genuine_classes is None:
-        genuine_classes = 1
-        cft_classes = 0
+        genuine_classes = [1]
+        cft_classes = [0]
     else:
         classes = list(range(len(np.unique(truth))))
         cft_classes = [i for i in classes if i not in genuine_classes]
 
+
     genuine_scores = [scores[i] for i in range(len(scores)) if truth[i] in genuine_classes]
-    print('lowest_scoring_genuine: {}: {}'.format(np.where(scores == min(genuine_scores))[0][0], min(genuine_scores)))
-
     cft_scores = [scores[i] for i in range(len(scores)) if truth[i] in cft_classes]
-    print('highest_scoring_counterfeit: {}: {}'.format(np.where(scores == max(cft_scores))[0][0], max(cft_scores)))
+    if genuine_scores and cft_scores:
+        print('lowest_scoring_genuine: {}: {}'.format(np.where(scores == min(genuine_scores))[0][0], min(genuine_scores)))
+        cftBoolMask = [True if ii == 0 else False for ii in truth]
+        scoreBoolMask = (scores > min(genuine_scores))
+        write_transgressionals(cftBoolMask, scoreBoolMask, 'cfts')
 
-    cftBoolMask = [True if ii == 0 else False for ii in truth]
-    scoreBoolMask = (scores > min(genuine_scores))
-    write_transgressionals(cftBoolMask, scoreBoolMask, 'cfts')
-
-    genBoolMask = [not i for i in cftBoolMask]
-    scoreBoolMask = (scores < max(cft_scores))
-    write_transgressionals(genBoolMask, scoreBoolMask, 'gens')
+        print('highest_scoring_counterfeit: {}: {}'.format(np.where(scores == max(cft_scores))[0][0], max(cft_scores)))
+        genBoolMask = [not i for i in cftBoolMask]
+        scoreBoolMask = (scores < max(cft_scores))
+        write_transgressionals(genBoolMask, scoreBoolMask, 'gens')
 
 def write_out_scores_noimages(scores, y, scr_order, truth, array_scored, genuine_classes = None):
     clean_directories()
@@ -258,8 +320,8 @@ def write_out_scores_noimages(scores, y, scr_order, truth, array_scored, genuine
 
 
     if genuine_classes is None:
-        genuine_classes = 1
-        cft_classes = 0
+        genuine_classes = [1]
+        cft_classes = [0]
     else:
         classes = list(range(len(np.unique(truth))))
         cft_classes = [i for i in classes if i not in genuine_classes]

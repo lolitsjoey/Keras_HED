@@ -14,6 +14,7 @@ import numpy as np
 import cv2
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
+from keras.utils import to_categorical
 
 def prepare_data(img_folder_to_classify):
     imageFileNames = []
@@ -29,6 +30,9 @@ def prepare_data(img_folder_to_classify):
     x_train, x_test, y_train, y_test = train_test_split(imageFileNames, truth, test_size=0.2, random_state=1)
     x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.25, random_state=1)
 
+    y_train = to_categorical(y_train)
+    y_test = to_categorical(y_test)
+    y_val = to_categorical(y_val)
     return x_train, x_test, x_val, y_train, y_test, y_val
 
 def grab_batches_with_generator(x_train, x_test, x_val, y_train, y_test, y_val, batchSize):
@@ -39,9 +43,10 @@ def grab_batches_with_generator(x_train, x_test, x_val, y_train, y_test, y_val, 
     return train_batches, test_batches, val_batches
 
 def load_image(file_path, imShape):
-    im = cv2.imread(file_path)
+    im = cv2.imread(file_path,1)
     im = cv2.resize(im, imShape)
-    im = cv2.medianBlur(im, 9)
+    im = ((im - np.mean(im))/np.std(im))
+    im = cv2.GaussianBlur(im,(9,9),0)
     return im
 
 class Inline_Generator(keras.utils.Sequence):
@@ -84,7 +89,8 @@ def classify_build_conv(weights_dir):
     ee = Flatten()(r)
     rr = Dense(169, activation = 'relu')(ee)
     u = Dense(20, activation = 'relu')(rr)
-    s = Dense(1, activation = 'sigmoid')(u)
+    #s = Dense(1, activation = 'sigmoid')(u)
+    s = Dense(2, activation='softmax')(u)
     model = Model(inputs=input, outputs=s)
 
     if os.path.isfile(weights_dir):

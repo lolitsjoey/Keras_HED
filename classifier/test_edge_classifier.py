@@ -12,9 +12,9 @@ def get_dense_output(dense_df, img_folder_to_classify, model, layer_name, imShap
     predictions = []
     truth = []
     for idx,img in enumerate(os.listdir(img_folder_to_classify)):
-        test_img = cv2.resize(cv2.imread(img_folder_to_classify + img), imShape)
+        test_img = cv2.resize(cv2.imread(img_folder_to_classify + img, 3), imShape)
         answer = model.predict(test_img[None, :, :, :])
-        predictions.append(answer[0][0])
+        predictions.append(int(np.argmax(answer)))
 
         if 'genuine' in img:
             truth.append(1)

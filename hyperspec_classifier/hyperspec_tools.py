@@ -13,6 +13,7 @@ from tensorflow.keras.layers import Dense, Activation, Flatten
 from tensorflow.keras.layers import Conv2D, MaxPooling2D
 from tensorflow.keras.callbacks import ModelCheckpoint
 from sklearn.model_selection import train_test_split
+from keras.utils import to_categorical
 
 def load_y_data(y_path):
     y = np.loadtxt(y_path, dtype=np.int32).reshape(-1,1)
@@ -105,7 +106,7 @@ def build_cnn_model(activation, input_shape, num_classes):
     model.add(Flatten())
 
     # 3 Full connected layer
-    model.add(Dense(128, activation=activation, kernel_initializer="he_normal"))
+    model.add(Dense(128, activation=tf.keras.layers.LeakyReLU(), kernel_initializer="he_normal"))
     model.add(Dense(54, activation=activation, kernel_initializer="he_normal"))
     model.add(Dense(num_classes, activation='softmax'))  # 6 classes
 
@@ -115,11 +116,12 @@ def build_cnn_model(activation, input_shape, num_classes):
 
 
 def compile_and_fit_model(model, X_train, y_train, X_test, y_test, batch_size, n_epochs, name):
+    y_train = to_categorical(y_train)
     # compile the model
     model.compile(
         optimizer=tf.keras.optimizers.Adam(),
-        loss='sparse_categorical_crossentropy',
-        metrics=['sparse_categorical_accuracy'])
+        loss='categorical_crossentropy',
+        metrics=['categorical_accuracy'])
 
     # define callbacks
     callbacks = [
