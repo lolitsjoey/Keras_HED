@@ -140,18 +140,18 @@ def print_stats(rand_gam, ordered_scores, ordered_labels, new_values, y):
     print('Model Accuracy: {}'.format(rand_gam.accuracy(new_values, y)))
 
 def clean_directories():
-    shutil.rmtree('./GAM_model/scored/rgb/')
-    shutil.rmtree('./GAM_model/scored/edge/')
-    shutil.rmtree('./GAM_model/scored/transgressional_cfts/')
-    shutil.rmtree('./GAM_model/scored/transgressional_gens/')
-    os.makedirs('./GAM_model/scored/rgb/')
-    os.makedirs('./GAM_model/scored/edge/')
-    os.makedirs('./GAM_model/scored/transgressional_cfts/')
-    os.makedirs('./GAM_model/scored/transgressional_gens/')
+    shutil.rmtree('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/rgb/')
+    shutil.rmtree('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/edge/')
+    shutil.rmtree('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/transgressional_cfts/')
+    shutil.rmtree('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/transgressional_gens/')
+    os.makedirs('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/rgb/')
+    os.makedirs('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/edge/')
+    os.makedirs('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/transgressional_cfts/')
+    os.makedirs('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/transgressional_gens/')
 
 def write_edge(dirList, img, imShape, truth, scores, i):
     res_img = cv2.resize(cv2.imread(dirList[0] + img), imShape)
-    cv2.imwrite('./GAM_model/scored/edge/' + str(i) + '_' + str(truth[i]) + '_' + str(
+    cv2.imwrite('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/edge/' + str(i) + '_' + str(truth[i]) + '_' + str(
         scores[i]) + '.jpg',
                 res_img)
 
@@ -159,7 +159,7 @@ def write_rgb(dirList, img, truth, scores, i):
     img = img[0:-10] + '.jpg'
     res_img = cv2.imread(dirList[1] + img)
     try:
-        cv2.imwrite('./GAM_model/scored/rgb/' + str(i) + '_' + str(truth[i]) + '_' + str(
+        cv2.imwrite('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/rgb/' + str(i) + '_' + str(truth[i]) + '_' + str(
             scores[i]) + '.jpg', res_img)
     except Exception:
         img = img[0:-4] + '.bmp'
@@ -278,8 +278,9 @@ def write_out_scores(scores, y, scr_order, truth, imShape = (480, 480), genuine_
     for i, img in enumerate(ordered_list):
         write_edge(dirList, img, imShape, truth, scores, i)
 
-    for i, img in enumerate(ordered_list):
-        write_rgb(dirList, img, truth, scores, i)
+    if rgb_dir is not False:
+        for i, img in enumerate(ordered_list):
+            write_rgb(dirList, img, truth, scores, i)
 
     if genuine_classes is None:
         genuine_classes = [1]
@@ -291,7 +292,7 @@ def write_out_scores(scores, y, scr_order, truth, imShape = (480, 480), genuine_
 
     genuine_scores = [scores[i] for i in range(len(scores)) if truth[i] in genuine_classes]
     cft_scores = [scores[i] for i in range(len(scores)) if truth[i] in cft_classes]
-    if genuine_scores and cft_scores:
+    if (genuine_scores and cft_scores) and (rgb_dir is not False):
         print('lowest_scoring_genuine: {}: {}'.format(np.where(scores == min(genuine_scores))[0][0], min(genuine_scores)))
         cftBoolMask = [True if ii == 0 else False for ii in truth]
         scoreBoolMask = (scores > min(genuine_scores))
