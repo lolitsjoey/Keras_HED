@@ -8,7 +8,7 @@ def parse_hyperspec_lists(dir, search_string, num_segs, plot = False):
 
     dictOfSegs = {}
 
-    list_of_folders = [i for i in os.listdir(dir) if search_string in i]
+    list_of_folders = [i for i in os.listdir(dir) if (search_string in i) and ('.txt' in i)]
     for count, signal in enumerate(list_of_folders):
         with open(dir + signal, 'r+') as rf:
             lines = rf.readlines()

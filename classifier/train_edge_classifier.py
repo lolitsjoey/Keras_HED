@@ -27,18 +27,24 @@ def prepare_data(img_folder_to_classify):
             truth.append(0)
     truth = np.array(truth)
 
-    x_train, x_test, y_train, y_test = train_test_split(imageFileNames, truth, test_size=0.2, random_state=1)
-    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.25, random_state=1)
+    #random state was 1
+    x_train, x_test, y_train, y_test = train_test_split(imageFileNames, truth, test_size=0.2)
+    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.25)
 
     y_train = to_categorical(y_train)
     y_test = to_categorical(y_test)
     y_val = to_categorical(y_val)
     return x_train, x_test, x_val, y_train, y_test, y_val
 
-def grab_batches_with_generator(x_train, x_test, x_val, y_train, y_test, y_val, batchSize):
-    train_batches = Inline_Generator(x_train, y_train, batchSize)
-    val_batches = Inline_Generator(x_val, y_val, batchSize)
-    test_batches = Inline_Generator(x_test, y_test, batchSize)
+def grab_batches_with_generator(x_train, x_test, x_val, y_train, y_test, y_val, batchSize, blur=True):
+    if blur:
+        train_batches = Inline_Generator(x_train, y_train, batchSize)
+        val_batches = Inline_Generator(x_val, y_val, batchSize)
+        test_batches = Inline_Generator(x_test, y_test, batchSize)
+    else:
+        train_batches = Inline_Generator_No_Blur(x_train, y_train, batchSize)
+        val_batches = Inline_Generator_No_Blur(x_val, y_val, batchSize)
+        test_batches = Inline_Generator_No_Blur(x_test, y_test, batchSize)
 
     return train_batches, test_batches, val_batches
 
@@ -63,6 +69,28 @@ class Inline_Generator(keras.utils.Sequence):
         batch_y = self.labels[idx * self.batchSize: (idx + 1) * self.batchSize]
 
         return np.array([load_image(f, (480, 480)) for f in batch_x]) / 255.0, np.array(batch_y)
+
+def load_image_no_blur(file_path, imShape):
+    im = cv2.imread(file_path,1)
+    im = cv2.resize(im, imShape)
+    im = ((im - np.mean(im))/np.std(im))
+    return im
+
+class Inline_Generator_No_Blur(keras.utils.Sequence):
+    def __init__(self, imageFileNames, labels, batchSize):
+        self.imageFileNames = imageFileNames
+        self.labels = labels
+        self.batchSize = batchSize
+
+    def __len__(self):
+        return (np.ceil(len(self.imageFileNames) / float(self.batchSize))).astype(np.int)
+
+    def __getitem__(self, idx):
+        batch_x = self.imageFileNames[idx * self.batchSize: (idx + 1) * self.batchSize]
+        batch_y = self.labels[idx * self.batchSize: (idx + 1) * self.batchSize]
+
+        return np.array([load_image_no_blur(f, (480, 480)) for f in batch_x]) / 255.0, np.array(batch_y)
+
 
 def classify_build(weights_dir):
     input = Input(shape=(480,480,3))

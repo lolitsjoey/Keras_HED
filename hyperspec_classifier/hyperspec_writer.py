@@ -5,10 +5,10 @@ from random import randint
 import numpy as np
 import pywt
 from scipy.signal import savgol_filter
-
+from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from hyperspec_classifier.notemethods import straightenHS
-
+import pandas as pd
 class HyperSpecImage:
     def __init__(self, pathHDR, pathRAW, bString=False, rotation=-1, hFlip=False, vFlip=False):
         self.status      = False
@@ -176,7 +176,11 @@ def extractMasks(labels, seg):
     mask[off] = 0
     return mask
 
-def write_hyper_spec(folder_of_folders, hyperspec_destination, num_segs, fileString, scales, wavelet):
+def write_hyper_spec(folder_of_folders, hyperspec_destination, num_segs, fileString, scales, wavelet, do_pca=False):
+    if do_pca:
+        pca_frame = pd.DataFrame()
+        pca_list = []
+        index_list = []
     for img_num, img_folder in enumerate(os.listdir(folder_of_folders)):
         noteDir = folder_of_folders + img_folder
         hsList = [f for f in os.listdir(noteDir) if 'HSI' in f]
@@ -199,7 +203,7 @@ def write_hyper_spec(folder_of_folders, hyperspec_destination, num_segs, fileStr
             hsFront = HyperSpecImage(frontHDR, frontRAW, rotation=0, hFlip=True, vFlip=True)
         hsFront.cropAndStraighten()
 
-        hsSample = np.array([hsFront.array[:, :,i] for i in range(0,224)]).transpose((1,2,0))
+        hsSample = np.array([hsFront.array[260:380,630:770,i] for i in range(0,224)]).transpose((1,2,0))
 
         arrMod = flattenHSToDataFrame(hsSample)
         labels = runKMeans(arrMod, num_segs)
@@ -222,6 +226,13 @@ def write_hyper_spec(folder_of_folders, hyperspec_destination, num_segs, fileStr
             with open(hyperspec_destination + "./{}_file{}_{}.{}.txt".format(fileString, img_num, seg, num_segs), 'w+') as output:
                 output.write(str(hyper_arr[seg,:]))
 
+            mask = extractMasks(labels, seg)
+            labelIm = restoreArrayToImage(mask, hsSample)
+            overlay = displayOverlay(hsSample[:, :, 70], labelIm)
+            cv2.imwrite(
+                hyperspec_destination + 'rgb/{}_file{}_{}.{}.jpg'.format(fileString, img_num, true_seg, num_segs),
+                overlay * 255)
+
             coeffs, freqs = pywt.cwt(hyper_arr[seg,:], scales, wavelet)
             old_value = coeffs
             old_min = np.min(coeffs)
@@ -231,10 +242,18 @@ def write_hyper_spec(folder_of_folders, hyperspec_destination, num_segs, fileStr
             new_value = ((old_value - old_min) / (old_max - old_min)) * (new_max - new_min) + new_min
             new_value = np.array(new_value, dtype='uint8')
             im_color = cv2.applyColorMap(new_value, cv2.COLORMAP_HOT)
-            cv2.imwrite(hyperspec_destination + 'cwt/{}_file{}_{}.{}_waves.bmp'.format(fileString, img_num, true_seg, num_segs), im_color)
+            cv2.imwrite(hyperspec_destination + 'cwt/{}_file{}_{}.{}_waves.bmp'.format(fileString, img_num, true_seg, num_segs),
+                                                                                                                        im_color)
+            if do_pca:
+                coeffs = (coeffs - coeffs.mean())/coeffs.std()
+                pca = PCA(n_components=1)
+                feat_vec = pca.fit_transform(coeffs).flatten()
+                pca_list.append(feat_vec)
+                index_list.append('{}_file{}_{}.{}'.format(fileString, img_num, true_seg, num_segs))
 
-            mask = extractMasks(labels, seg)
-            labelIm = restoreArrayToImage(mask, hsSample)
-            overlay = displayOverlay(hsSample[:, :, 70], labelIm)
-            cv2.imwrite(hyperspec_destination + 'rgb/{}_file{}_{}.{}.jpg'.format(fileString, img_num, true_seg, num_segs), overlay * 255)
+
+    if do_pca:
+        pca_frame = pd.DataFrame(pca_list)
+        pca_frame.index = index_list
+        pca_frame.to_csv(hyperspec_destination + '/pca_frame_' + fileString +  '.csv')
 

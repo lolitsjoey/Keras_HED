@@ -8,11 +8,14 @@ from classifier.train_edge_classifier import classify_build, classify_build_conv
 from scipy.cluster.hierarchy import dendrogram, linkage, cut_tree
 from sklearn.decomposition import PCA
 
-def get_dense_output(dense_df, img_folder_to_classify, model, layer_name, imShape = (480,480), write = False):
+def get_dense_output(dense_df, img_folder_to_classify, model, layer_name, imShape = (480,480), write = False, edge=False, dct=False):
     predictions = []
     truth = []
     for idx,img in enumerate(os.listdir(img_folder_to_classify)):
         test_img = cv2.resize(cv2.imread(img_folder_to_classify + img, 3), imShape)
+        test_img = ((test_img - np.mean(test_img)) / np.std(test_img))
+        if edge:
+            test_img = cv2.GaussianBlur(test_img, (9, 9), 0)
         answer = model.predict(test_img[None, :, :, :])
         predictions.append(int(np.argmax(answer)))
 

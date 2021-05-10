@@ -97,6 +97,7 @@ def create_rand_gam(number_of_searches, new_values, pred_y, y, pca_splines, pca_
     lams = np.random.rand(number_of_searches, new_values.shape[1] + 1)  # random points on [0, 1], with shape (1000, 3)
     lams = lams * 8 - 4  # shift values to -4, 4
     lams = 10 ** lams  # transforms values to 1e-4, 1e4
+    lams[:,-1] = [10 ** i for i in np.random.rand(number_of_searches) * 4]
     new_values = np.append(new_values, np.array(pred_y).reshape(-1, 1), axis=1)
 
     titles = []
@@ -115,19 +116,23 @@ def create_rand_gam(number_of_searches, new_values, pred_y, y, pca_splines, pca_
     return rand_gam, new_values, titles
 
 def plot_variables(rand_gam, new_values, titles):
-    fig, axs = plt.subplots(1, new_values.shape[1])
-    titles.append('class_guess')
-    for i, ax in enumerate(axs):
-        XX = rand_gam.generate_X_grid(term=i)
-        pdep, confi = rand_gam.partial_dependence(term=i, width=.95)
-        ax.plot(XX[:, i], pdep)
-        ax.plot(XX[:, i], confi, c='r', ls='--')
-        ax.set_title(titles[i])
-    plt.show()
+    try:
+        fig, axs = plt.subplots(1, new_values.shape[1])
+        titles.append('class_guess')
+        for i, ax in enumerate(axs):
+            XX = rand_gam.generate_X_grid(term=i)
+            pdep, confi = rand_gam.partial_dependence(term=i, width=.95)
+            ax.plot(XX[:, i], pdep)
+            ax.plot(XX[:, i], confi, c='r', ls='--')
+            ax.set_title(titles[i])
+        plt.show()
+    except ValueError:
+        print('Cant Plot')
 
-def print_stats(rand_gam, ordered_scores, ordered_labels, new_values, y):
-    genuine_scores = [ordered_scores[i] for i in range(len(ordered_scores)) if ordered_labels[i] == 1]
-    cft_scores = [ordered_scores[i] for i in range(len(ordered_scores)) if ordered_labels[i] == 0]
+def print_stats(rand_gam, ordered_scores, ordered_labels, ordered_truth, new_values, y):
+
+    genuine_scores = [ordered_scores[i] for i in range(len(ordered_scores)) if ordered_truth[i] == 1]
+    cft_scores = [ordered_scores[i] for i in range(len(ordered_scores)) if ordered_truth[i] == 0]
 
     if genuine_scores:
         crit_genuine = min(genuine_scores)
@@ -162,10 +167,16 @@ def write_rgb(dirList, img, truth, scores, i):
         cv2.imwrite('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/rgb/' + str(i) + '_' + str(truth[i]) + '_' + str(
             scores[i]) + '.jpg', res_img)
     except Exception:
-        img = img[0:-4] + '.bmp'
-        res_img = cv2.imread(dirList[1] + img)
-        cv2.imwrite('./GAM_model/scored/rgb/' + str(i) + '_' + str(truth[i]) + '_' + str(
-            scores[i]) + '.jpg', res_img)
+        try:
+            img = img[0:-4] + '.bmp'
+            res_img = cv2.imread(dirList[1] + img)
+            cv2.imwrite('./GAM_model/scored/rgb/' + str(i) + '_' + str(truth[i]) + '_' + str(
+                scores[i]) + '.jpg', res_img)
+        except Exception:
+            img = img[0:-4] + '.png'
+            res_img = cv2.imread(dirList[1] + img)
+            cv2.imwrite('./GAM_model/scored/rgb/' + str(i) + '_' + str(truth[i]) + '_' + str(
+                scores[i]) + '.jpg', res_img)
 
 def write_transgressionals(class_mask, score_mask, class_string):
     transgressional = [x and y for x, y in zip(class_mask, score_mask)]
@@ -182,78 +193,57 @@ def write_transgressionals(class_mask, score_mask, class_string):
                             cv2.imread('./GAM_model/scored/edge/' + img_name))
 
 
-
-def score_notes_from_network(csv_dir, num_class = False, number_of_searches = 5000, pca_quality=0.99, pca_splines=20, pca_lam=0.4,
-                             pred_lam=0.02, pred_splines=50, pred_factor=True,
-                             save_name=False, pca=False, load=False, load_name=False, genuine_classes=None):
-
-    dataset, y, pred_y = prep_dataset(csv_dir)
-    num_classes = len(set(y))
-    #num_classes = 1
-    if load:
-        num_classes = num_class
-
-    if not save_name:
-        name = str(uuid.uuid4()) + '.pkl'
-        save_name = './GAM_model/models/' + name
-
+def multinomial_glm(pca, new_values, y, pred_y, save_name, load_name, num_classes, genuine_classes, load, rand_gam=False):
+    print('WARNING: No multinomial GAM implementation in Python. Resorting to MultiNomial Regression')
     if not load:
-        pca = PCA(pca_quality)
-        pca.fit(dataset)
-    else:
-        if not load_name:
-            load_name = save_name
-        rand_gam, pca = load_model(load_name)
+        new_values = np.append(new_values, np.array(pred_y).reshape(-1, 1), axis=1)
+        rand_gam = LogisticRegression(multi_class='multinomial', max_iter=10000).fit(new_values, y)
 
-    new_values = pca.transform(dataset)
-    print('Reduced to {}-dimensions'.format(str(new_values.shape[1])))
+    scores_pre = rand_gam.predict_proba(new_values)
 
-    if num_classes != 2:
-        print('WARNING: No multinomial GAM implementation in Python. Resorting to MultiNomial Regression')
-        if not load:
-            rand_gam = LogisticRegression(random_state=0, multi_class='multinomial', max_iter=10000).fit(new_values, y)
+    if genuine_classes is None:
+        genuine_classes = np.arange(0, num_classes / 2)
 
-        scores_pre = rand_gam.predict_proba(new_values)
+    # TODO MAYBE SOME CLEVER ENSEMBLE CHOICE HERE
 
-        if genuine_classes is None:
-            genuine_classes = np.arange(0, num_classes / 2)
+    class_guess_gam = np.argmax(scores_pre, axis=1)
+    wrong_rows_log = [i for i in range(len(y)) if class_guess_gam[i] != y[i]]
 
-        #TODO MAYBE SOME CLEVER ENSEMBLE CHOICE HERE
+    class_guess = np.array(pred_y)
+    wrong_rows_classifier = [i for i in range(len(y)) if class_guess[i] != y[i]]
 
-        class_guess = np.argmax(scores_pre, axis=1)
-        wrong_rows_log = [i for i in range(len(y)) if class_guess[i] != y[i]]
+    ii = np.array(wrong_rows_classifier)
+    print(
+        'Incorrect Rows Classifier: {}, the log has {}'.format(wrong_rows_classifier, scores_pre[ii, np.array(y)[ii]]))
+    print('Incorrect Rows Logistic: {}'.format(wrong_rows_log))
 
-        class_guess = np.array(pred_y)
-        wrong_rows_classifier = [i for i in range(len(y)) if class_guess[i] != y[i]]
+    scores = []
+    for idx, clss in enumerate(class_guess):
+        if clss in genuine_classes:
+            scores.append(scores_pre[idx, clss])
+        else:
+            scores.append(1 - scores_pre[idx, clss])
+    if not load:
+        save_model(save_name, rand_gam, pca)
+
+    ordered_scores, ordered_labels, arguments = learn_transform_scores(scores, class_guess, load_name, save_name, load)
+
+    return ordered_scores, ordered_labels, arguments, np.array(y)[arguments]
 
 
-        ii = np.array(wrong_rows_classifier)
-        print('Incorrect Rows Classifier: {}, the log has {}'.format(wrong_rows_classifier,  scores_pre[ii,np.array(y)[ii]]))
-        print('Incorrect Rows Logistic: {}'.format(wrong_rows_log))
-
-        scores = []
-        for idx, clss in enumerate(class_guess):
-            if clss in genuine_classes:
-                scores.append(scores_pre[idx, clss])
-            else:
-                scores.append(1 - scores_pre[idx, clss])
-        if not load:
-            save_model(save_name, rand_gam, pca)
-
-        ordered_scores, ordered_labels, arguments = learn_transform_scores(scores, class_guess, load_name, save_name, load)
-
-        return ordered_scores, ordered_labels, arguments, np.array(y)[arguments]
-
+def logistic_gam(pca, new_values, y, pred_y,number_of_searches, pca_splines, pca_lam,
+                             pred_lam, pred_splines, pred_factor, save_name, load, load_name, rand_gam=False):
     if not load:
         rand_gam, new_values, titles = create_rand_gam(number_of_searches, new_values, pred_y, y,
-                        pca_splines, pca_lam, pred_splines, pred_lam, pred_factor)
+                                                       pca_splines, pca_lam, pred_splines, pred_lam, pred_factor)
 
         rand_gam.summary()
         save_name = save_model(save_name, rand_gam, pca)
 
-        plot_variables(rand_gam, new_values, titles)
+        # plot_variables(rand_gam, new_values, titles)
     else:
         new_values = np.append(new_values, np.array(pred_y).reshape(-1, 1), axis=1)
+
     scores = rand_gam.predict_proba(new_values)
     predictions = np.array(rand_gam.predict(new_values), dtype=np.int)
     ordered_scores, ordered_labels, arguments = learn_transform_scores(scores, predictions, load_name, save_name, load)
@@ -262,11 +252,48 @@ def score_notes_from_network(csv_dir, num_class = False, number_of_searches = 50
     for i in range(new_values.shape[1] - 1):
         titles.append(str(i))
     titles.append('class_guess')
-    plot_variables(rand_gam, new_values, titles)
+    # plot_variables(rand_gam, new_values, titles)
+    ordered_truth = np.array(y)[arguments]
+    print_stats(rand_gam, ordered_scores, ordered_labels, ordered_truth, new_values, y)
 
-    print_stats(rand_gam, ordered_scores, ordered_labels, new_values, y)
+    return ordered_scores, ordered_labels, arguments, ordered_truth
 
-    return ordered_scores, ordered_labels, arguments, np.array(y)[arguments]
+
+def score_notes_from_network(csv_dir, num_class=False, number_of_searches=5000, pca_quality=0.99, pca_splines=20, pca_lam=0.4,
+                             pred_lam=0.02, pred_splines=50, pred_factor=True,
+                             save_name=False, pca=False, load=False, load_name=False, genuine_classes=None):
+
+    dataset, y, pred_y = prep_dataset(csv_dir)
+    num_classes = len(set(y))
+
+    if load:
+        num_classes = num_class
+        if not load_name:
+            load_name = save_name
+        rand_gam, pca = load_model(load_name)
+    else:
+        pca = PCA(pca_quality)
+        pca.fit(dataset)
+        rand_gam=False
+    if not save_name:
+        name = str(uuid.uuid4()) + '.pkl'
+        save_name = './GAM_model/models/' + name
+
+    new_values = pca.transform(dataset)
+    print('Reduced to {}-dimensions'.format(str(new_values.shape[1])))
+
+    if num_classes != 2:
+        ordered_scores, ordered_labels, arguments, ordered_truth = multinomial_glm(pca, new_values, y, pred_y,
+                                                                                   save_name, load_name, num_classes,
+                                                                                   genuine_classes, load, rand_gam)
+    else:
+        ordered_scores, ordered_labels, arguments, ordered_truth = logistic_gam(pca, new_values, y, pred_y,
+                                                                                number_of_searches, pca_splines, pca_lam,
+                                                                                pred_lam, pred_splines, pred_factor,
+                                                                                save_name, load, load_name, rand_gam)
+
+    return ordered_scores, ordered_labels, arguments, ordered_truth
+
 
 def write_out_scores(scores, y, scr_order, truth, imShape = (480, 480), genuine_classes = None,  images_scored='./pl_train_station/output_hed_images/',
                      rgb_dir='./pl_train_station/pretty_good_set_input/'):
@@ -340,6 +367,7 @@ def write_out_scores_noimages(scores, y, scr_order, truth, array_scored, genuine
     genBoolMask = [not i for i in cftBoolMask]
     scoreBoolMask = (scores < max(cft_scores))
     write_transgressionals(genBoolMask, scoreBoolMask, 'gens')
+
 
 if __name__ == '__main__':
     ordered_scores, ordered_labels, arguments, ordered_truth = score_notes_from_network('./intermediate_output.csv', number_of_searches=1000)

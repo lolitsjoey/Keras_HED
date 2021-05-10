@@ -48,9 +48,6 @@ if __name__ == '__main__':
                 fileString = 'counterfeit'
                 write_hyper_spec(folder_of_folders, hyperspec_destination, num_segs, fileString, scales, wavelet)
 
-
-
-
             x_train_cwt, x_test_cwt, x_val_cwt, y_train, y_test, y_val, train_batches, test_batches, val_batches = get_batches(hyperspec_destination, wavelet, batchSize, scales, num_segs)
 
             input_shape = (x_train_cwt.shape[1], x_train_cwt.shape[2], x_train_cwt.shape[3])
