@@ -8,7 +8,7 @@ from hyperspec_classifier.sort_signal_lists import parse_hyperspec_lists
 import random
 from hyperspec_classifier.hyperspec_tools import build_cnn_model, listToArray, create_cwt_images
 from tensorflow import keras
-from keras.layers import Dense, Input, SimpleRNN
+from keras.layers import Dense, Input, SimpleRNN, Embedding, GRU
 from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 import pandas as pd
@@ -117,6 +117,24 @@ def build_rnn_model(num_segs, feature_vec_length, rnn_neurons, dense_neurons):
     model.summary()
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
+
+def build_seq_model(num_segs, feature_vec_length, rnn_neurons, dense_neurons):
+    model = keras.Sequential()
+    inn = Input(shape=(feature_vec_length,1))
+    model.add(inn)
+    # The output of GRU will be a 3D tensor of shape (batch_size, timesteps, 256)
+    model.add(GRU(rnn_neurons))
+    # The output of SimpleRNN will be a 2D tensor of shape (batch_size, 128)
+    model.add(Dense(dense_neurons))
+    #model.add(SimpleRNN(rnn_neurons))
+    model.add(Dense(32))
+    model.add(Dense(int(num_segs*2), activation='softmax'))
+    model.summary()
+    model.compile(loss='categorical_crossentropy', optimizer=keras.optimizers.SGD(), metrics=['accuracy'])
+
+    return model
+
+
 
 
 

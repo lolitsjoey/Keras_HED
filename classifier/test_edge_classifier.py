@@ -11,18 +11,21 @@ from sklearn.decomposition import PCA
 def get_dense_output(dense_df, img_folder_to_classify, model, layer_name, imShape = (480,480), write = False, edge=False, dct=False):
     predictions = []
     truth = []
-    for idx,img in enumerate(os.listdir(img_folder_to_classify)):
+    index_order = []
+    for idx, img in enumerate(os.listdir(img_folder_to_classify)):
         test_img = cv2.resize(cv2.imread(img_folder_to_classify + img, 3), imShape)
         test_img = ((test_img - np.mean(test_img)) / np.std(test_img))
         if edge:
             test_img = cv2.GaussianBlur(test_img, (9, 9), 0)
         answer = model.predict(test_img[None, :, :, :])
         predictions.append(int(np.argmax(answer)))
+        index_order.append('_'.join(img.split('_')[0:2]))
 
         if 'genuine' in img:
             truth.append(1)
         else:
             truth.append(0)
+
 
         intermediate_layer_model = keras.Model(inputs=model.input,
                                                outputs=model.get_layer(layer_name).output)
@@ -37,19 +40,24 @@ def get_dense_output(dense_df, img_folder_to_classify, model, layer_name, imShap
     if write:
         dense_df.to_csv('./intermediate_output.csv')
 
-    return dense_df
+    return dense_df, index_order
 
-def get_dense_output_no_images(dense_df, array_to_classify, truth, model, layer_name, imShape = (480,480), binary = True, write = False):
+def get_dense_output_no_images(dense_df, array_to_classify, truth, model, layer_name, imShape = (480,480), binary = True, write = False, do_pca=False):
     predictions = []
     for idx,img in enumerate(array_to_classify):
-        answer = model.predict(img[None, :, :, :])
+        if do_pca:
+            img = np.reshape(img, (-1, len(img), 1))
+        else:
+            img = img[None, :, :, :]
+
+        answer = model.predict(img)
         if binary:
             predictions.append(answer[0][0])
         else:
             predictions.append(np.argmax(answer))
         intermediate_layer_model = keras.Model(inputs=model.input,
                                                outputs=model.get_layer(layer_name).output)
-        intermediate_output = intermediate_layer_model(img[None, :, :, :])
+        intermediate_output = intermediate_layer_model(img)
         dense_df.iloc[idx,:] = list(intermediate_output)[0]
 
         if idx%100 == 99:

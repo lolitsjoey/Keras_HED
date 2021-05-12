@@ -115,7 +115,7 @@ def create_rand_gam(number_of_searches, new_values, pred_y, y, pca_splines, pca_
     rand_gam = LogisticGAM(x).gridsearch(new_values, y, lam=lams)
     return rand_gam, new_values, titles
 
-def plot_variables(rand_gam, new_values, titles):
+def plot_variables(rand_gam, new_values, titles, save_name):
     try:
         fig, axs = plt.subplots(1, new_values.shape[1])
         titles.append('class_guess')
@@ -125,7 +125,8 @@ def plot_variables(rand_gam, new_values, titles):
             ax.plot(XX[:, i], pdep)
             ax.plot(XX[:, i], confi, c='r', ls='--')
             ax.set_title(titles[i])
-        plt.show()
+        plt.savefig(save_name + '/' + save_name.split('/')[-1] + '_plot.png')
+        plt.close()
     except ValueError:
         print('Cant Plot')
 
@@ -224,7 +225,7 @@ def multinomial_glm(pca, new_values, y, pred_y, save_name, load_name, num_classe
         else:
             scores.append(1 - scores_pre[idx, clss])
     if not load:
-        save_model(save_name, rand_gam, pca)
+        save_name = save_model(save_name, rand_gam, pca)
 
     ordered_scores, ordered_labels, arguments = learn_transform_scores(scores, class_guess, load_name, save_name, load)
 
@@ -252,7 +253,7 @@ def logistic_gam(pca, new_values, y, pred_y,number_of_searches, pca_splines, pca
     for i in range(new_values.shape[1] - 1):
         titles.append(str(i))
     titles.append('class_guess')
-    # plot_variables(rand_gam, new_values, titles)
+    plot_variables(rand_gam, new_values, titles, save_name)
     ordered_truth = np.array(y)[arguments]
     print_stats(rand_gam, ordered_scores, ordered_labels, ordered_truth, new_values, y)
 

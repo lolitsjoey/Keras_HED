@@ -38,9 +38,6 @@ def loadTestData(testInputPath):
 
     inputImages = np.expand_dims(np.array([loadImage(str(file_name)) for file_name in inputImageSet]), axis=-1)
 
-    print('Printing dimensions of test image arrays...')
-    print(inputImages.shape)
-
     return inputImages, files
 
 def loadModel(load_tool_weights_from):
@@ -55,18 +52,12 @@ def loadModel(load_tool_weights_from):
 def evaluateModel(load_tool_weights_from, tool_images_in_this_folder, spit_tool_output_here):
 
     model = loadModel(load_tool_weights_from)
-    model.summary()
     inputTestData, names = loadTestData(tool_images_in_this_folder)
     encodedImages = model.encoder(inputTestData).numpy()
     decodedImages = model.decoder(encodedImages).numpy()
 
     for i in range(len(decodedImages)):
         cv2.imwrite(spit_tool_output_here + names[i][0:-4] + '_AEfft.bmp', (decodedImages[i] * 255).astype("uint8"))
-
-
-    print('Model evaluation complete')
-
-    return
 
 
 
