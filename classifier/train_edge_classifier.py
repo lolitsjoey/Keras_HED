@@ -126,7 +126,6 @@ def classify_build_conv(weights_dir):
         print('weights loaded: {}'.format(weights_dir))
 
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    print(model.summary())
     return model
 
 

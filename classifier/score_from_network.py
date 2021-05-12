@@ -57,6 +57,7 @@ def decimal_from_value(value):
 
 def learn_transform_scores(scores, predictions, load_name, save_name, load):
     transformed_scores = []
+    scores = np.array(scores, dtype=decimal.Decimal)
     if load:
         aaa = pd.read_csv(load_name + '/' + load_name.split('/')[-1] + '_extreme_scores.csv', converters={'bounds': decimal_from_value})
         slope = (100 - 0)/(aaa.values[1][0] - aaa.values[0][0])
@@ -64,13 +65,16 @@ def learn_transform_scores(scores, predictions, load_name, save_name, load):
             transformed_scores.append(round(slope * (- decimal.Decimal(1 / scr - 1).ln() - aaa.values[0][0]),3))
     else:
         lower_b = float(min(scores) / 1.2)
-        decimal.getcontext().prec = abs(int(math.floor(math.log10(lower_b)))) + 5
         upper_b = float(max(scores) + (1 - max(scores)) * 0.1)
 
+        if lower_b == 0.:
+            print('Log GAM or approximation almost definitly overfit')
+            lower_b = 1 - decimal.Decimal(upper_b)
+            scores[scores <= lower_b] = lower_b
+        decimal.getcontext().prec = abs(int(math.floor(math.log10(lower_b)))) + 5
         if upper_b == 1.0:
             print('Log GAM or approximation almost definitly overfit')
             upper_b = 1 - decimal.Decimal(lower_b)
-            scores = np.array(scores, dtype = decimal.Decimal)
             scores[scores >= upper_b] = upper_b
         try:
             slope = (100 - 0) / (- decimal.Decimal(1/upper_b - 1).ln() + decimal.Decimal(1/lower_b - 1).ln())

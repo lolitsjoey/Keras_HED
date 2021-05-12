@@ -91,7 +91,7 @@ def compile_and_fit_model(model, train_batches, val_batches, n_epochs):
     return model, history
 
 class Inline_Generator(keras.utils.Sequence):
-    def __init__(self, X_train, y_train, batch_size):
+    def __init__(self, X_train, y_train, batch_size, num_segs):
         self.x_train = X_train
         self.y_train = np.array(y_train)
         self.batchSize = batch_size
@@ -103,6 +103,7 @@ class Inline_Generator(keras.utils.Sequence):
         batch_x = self.x_train[idx * self.batchSize: (idx + 1) * self.batchSize]
         batch_y = self.y_train[idx * self.batchSize: (idx + 1) * self.batchSize]
         batch_x = batch_x[:,:,None]
+        batch_y = to_categorical(batch_y, self.num_segs*2)
         return batch_x, batch_y
 
 def build_rnn_model(num_segs, feature_vec_length, rnn_neurons, dense_neurons):
@@ -145,8 +146,6 @@ def build_and_fit_xgb_model(X_train, y_train, X_test, y_test, n_depth, subsample
                               subsample=subsample, # randomly selected fraction of training samples that will be used to train each tree.
                               use_label_encoder=False,
                               n_estimators=n_estimators)
-    y_test = [np.argmax(i) for i in y_test]
-    y_train = [np.argmax(i) for i in y_train]
     eval_set = [(X_train, y_train), (X_test, y_test)]
     history = xgb_model.fit(X_train, y_train, eval_metric=["merror"], eval_set=eval_set,verbose=True)
     return xgb_model, history

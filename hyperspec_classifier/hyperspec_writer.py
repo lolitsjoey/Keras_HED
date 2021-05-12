@@ -58,7 +58,7 @@ class HyperSpecImage:
             if 'lines' == row[:5]:
                 headerDict['lines'] = int(row.split('=')[1].replace(' ', ''))
             if 'wavelength' in row.lower():
-                headerDict['wavelengths'] = [float(w) for w in splitStr[idx+1].split(',')]
+                headerDict['wavelengths'] = [float(w) for w in splitStr[idx+1].split(',') if w!= '}']
         return headerDict
 
     def convertByteStringToArray(self, bString, hDict):
@@ -191,11 +191,6 @@ def write_hyper_spec(folder_of_folders, hyperspec_destination, num_segs, fileStr
             print('Cant find hyperspec for {}, skipping (1) note'.format(img_folder))
             continue
 
-        '''
-        import matplotlib.pyplot as plt
-        plt.imshow(overlay)
-        plt.show()
-        '''
         if fileString == 'genuine':
             #hsFront = HyperSpecImage(frontHDR, frontRAW, rotation=270, hFlip=False, vFlip=True)
             hsFront = HyperSpecImage(frontHDR, frontRAW, rotation=90, hFlip=True, vFlip=True)
@@ -257,3 +252,67 @@ def write_hyper_spec(folder_of_folders, hyperspec_destination, num_segs, fileStr
         pca_frame.index = index_list
         pca_frame.to_csv(hyperspec_destination + '/pca_frame_' + fileString +  '.csv')
 
+def scale_values(values):
+    old_min = np.min(values)
+    old_max = np.max(values)
+    new_min = 0
+    new_max = 1.
+    new_values = ((values - old_min) / (old_max - old_min)) * (new_max - new_min) + new_min
+    new_values = np.round(new_values, 5)
+    return new_values
+
+
+def write_hyper_spec_just_feature(folder_of_folders, hyperspec_destination, num_segs, fileString, indicator, scales, wavelet, do_pca=False):
+    if do_pca:
+        pca_frame = pd.DataFrame()
+        pca_list = []
+        index_list = []
+    for img_num, hyperspec in enumerate(os.listdir(folder_of_folders)):
+        if '.hdr' not in hyperspec:
+            continue
+        frontHDR = folder_of_folders + hyperspec
+        frontRAW = folder_of_folders + hyperspec[0:-4] + '.raw'
+
+        note_number = frontHDR.replace('.','/').replace('_','/').split('/')[-3]
+        save_name = fileString + str(int(note_number) - 1) + indicator + 'rig_' + note_number + '_HSI_featName'
+
+        hsFront = HyperSpecImage(frontHDR, frontRAW, rotation=90, hFlip=True, vFlip=True)
+        hsFront.cropAndStraighten()
+        hsSample = np.array([hsFront.array[:,:,i] for i in range(0,224)]).transpose((1,2,0))
+
+        arrMod = flattenHSToDataFrame(hsSample)
+        labels = runKMeans(arrMod, num_segs)
+
+        globalMean = np.mean(arrMod, axis=0)
+        smooth = savgol_filter(globalMean, 201, 2)
+
+        hyper_arr = np.zeros((len(np.unique(labels)), 224))
+        peak = []
+        for idx,label in enumerate(np.unique(labels)):
+
+            for band in range(224):
+                hyper_arr[idx,band] = np.mean(arrMod[labels == label,band]) - smooth[band]
+            peak.append(np.max(hyper_arr[idx,:]))
+
+        order = np.argsort(peak)
+        #labels = reorder_labels(labels, order)
+
+        for true_seg, seg in enumerate(order):
+            coeffs, freqs = pywt.cwt(hyper_arr[seg,:], scales, wavelet)
+            if do_pca:
+                pca = PCA(n_components=1)
+                feat_vec = pca.fit_transform(coeffs).flatten()
+                pca_list.append(feat_vec)
+                index_list.append(save_name + '_' + str(true_seg))
+
+
+    if do_pca:
+        pca_frame = pd.DataFrame(pca_list)
+        old_values = pca_frame.values
+        new_values = np.zeros(pca_frame.shape)
+        for i in range(int(len(pca_list)/num_segs)):
+            new_values[(i)*num_segs:(i+1)*num_segs, :] = scale_values(old_values[(i)*num_segs:(i+1)*num_segs, :])
+        pca_frame = pd.DataFrame(new_values)
+        pca_frame.index = index_list
+        pca_frame.to_csv(hyperspec_destination + '/pca_frame_' + fileString + '.csv')
+        print('oi oi')

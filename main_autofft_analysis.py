@@ -60,7 +60,7 @@ def main(rgb_image_feat, scores_df):
     if retrain_classifier:
         history = model.fit(x=train_batches,
                             epochs=epochs,
-                            verbose=1,
+                            verbose=0,
                             validation_data=val_batches
                             )
         model.save_weights(save_classifier_weights_to)
@@ -88,11 +88,11 @@ def main(rgb_image_feat, scores_df):
                                                                                         save_name=save_score_model_weights_to)
 
     scores_in_order_of_index_order = ordered_scores[np.argsort(arguments)]
-    scores_df['dct_scores'] = [np.nan] * len(scores_df)
+    scores_df[rgb_image_feat.split('/')[-2] + '_fft_scores'] = [np.nan] * len(scores_df)
     for ii, index_val in enumerate(index_order):
-        scores_df.loc[index_val]['dct_scores'] = scores_in_order_of_index_order[ii]
+        scores_df.loc[index_val][rgb_image_feat.split('/')[-2] + '_fft_scores'] = scores_in_order_of_index_order[ii]
 
-
+    return scores_df
     # write_out_scores(ordered_scores, ordered_labels, arguments, ordered_truth, images_scored=img_folder_to_test_classifier, rgb_dir=rgb_image_feat)
 
 

@@ -13,6 +13,8 @@ def get_dense_output(dense_df, img_folder_to_classify, model, layer_name, imShap
     truth = []
     index_order = []
     for idx, img in enumerate(os.listdir(img_folder_to_classify)):
+        if idx==0:
+            print(img)
         test_img = cv2.resize(cv2.imread(img_folder_to_classify + img, 3), imShape)
         test_img = ((test_img - np.mean(test_img)) / np.std(test_img))
         if edge:
