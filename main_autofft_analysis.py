@@ -28,7 +28,7 @@ def main(rgb_image_feat, scores_df):
     load_score_model_weights_dir = './score_models_per_feature/fft' + '_' + rgb_image_feat.split('/')[-2]
     retrain_scoremodel = True
 
-    new_tool_outputs = True
+    new_tool_outputs = False
     tool_images_in_this_folder = rgb_image_feat
     spit_tool_output_here = '/'.join(rgb_image_feat.split('/')[0:-2]) + '/' + rgb_image_feat.split('/')[-2] + '_fft/'
 

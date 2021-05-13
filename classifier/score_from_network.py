@@ -62,6 +62,10 @@ def learn_transform_scores(scores, predictions, load_name, save_name, load):
         aaa = pd.read_csv(load_name + '/' + load_name.split('/')[-1] + '_extreme_scores.csv', converters={'bounds': decimal_from_value})
         slope = (100 - 0)/(aaa.values[1][0] - aaa.values[0][0])
         for scr in scores:
+            if scr == 1.0:
+                scr = decimal.Decimal(1) / (1 + np.exp(-decimal.Decimal(aaa.values[1][0])))
+            elif scr == 0.:
+                scr = decimal.Decimal(1) / (1 + np.exp(-decimal.Decimal(aaa.values[0][0])))
             transformed_scores.append(round(slope * (- decimal.Decimal(1 / scr - 1).ln() - aaa.values[0][0]),3))
     else:
         lower_b = float(min(scores) / 1.2)
@@ -86,7 +90,7 @@ def learn_transform_scores(scores, predictions, load_name, save_name, load):
         for scr in scores:
             transformed_scores.append(round(slope * (- decimal.Decimal(1/scr - 1).ln() + decimal.Decimal(1/lower_b - 1).ln()),3))
 
-        scoring_df = pd.DataFrame([-decimal.Decimal(1 / lower_b - 1).ln(), - decimal.Decimal(1 / upper_b - 1).ln()])
+        scoring_df = pd.DataFrame([-decimal.Decimal(1 / lower_b - 1).ln(), -decimal.Decimal(1 / upper_b - 1).ln()])
         scoring_df.columns = ['bounds']
         scoring_df.to_csv(save_name + '/' + save_name.split('/')[-1] + '_extreme_scores.csv', index=False)
 
@@ -119,7 +123,7 @@ def create_rand_gam(number_of_searches, new_values, pred_y, y, pca_splines, pca_
     rand_gam = LogisticGAM(x).gridsearch(new_values, y, lam=lams)
     return rand_gam, new_values, titles
 
-def plot_variables(rand_gam, new_values, titles, save_name):
+def plot_variables(rand_gam, new_values, titles, save_name, load):
     try:
         fig, axs = plt.subplots(1, new_values.shape[1])
         titles.append('class_guess')
@@ -129,8 +133,11 @@ def plot_variables(rand_gam, new_values, titles, save_name):
             ax.plot(XX[:, i], pdep)
             ax.plot(XX[:, i], confi, c='r', ls='--')
             ax.set_title(titles[i])
-        plt.savefig(save_name + '/' + save_name.split('/')[-1] + '_plot.png')
-        plt.close()
+        if not load:
+            plt.savefig(save_name + '/' + save_name.split('/')[-1] + '_plot.png')
+            plt.close()
+        else:
+            plt.close()
     except ValueError:
         print('Cant Plot')
 
@@ -245,7 +252,7 @@ def logistic_gam(pca, new_values, y, pred_y,number_of_searches, pca_splines, pca
         rand_gam.summary()
         save_name = save_model(save_name, rand_gam, pca)
 
-        # plot_variables(rand_gam, new_values, titles)
+        # plot_variables(rand_gam, new_values, titles, load)
     else:
         new_values = np.append(new_values, np.array(pred_y).reshape(-1, 1), axis=1)
 
@@ -257,9 +264,10 @@ def logistic_gam(pca, new_values, y, pred_y,number_of_searches, pca_splines, pca
     for i in range(new_values.shape[1] - 1):
         titles.append(str(i))
     titles.append('class_guess')
-    plot_variables(rand_gam, new_values, titles, save_name)
+    plot_variables(rand_gam, new_values, titles, save_name, load)
     ordered_truth = np.array(y)[arguments]
-    print_stats(rand_gam, ordered_scores, ordered_labels, ordered_truth, new_values, y)
+    if not load:
+        print_stats(rand_gam, ordered_scores, ordered_labels, ordered_truth, new_values, y)
 
     return ordered_scores, ordered_labels, arguments, ordered_truth
 
@@ -269,7 +277,10 @@ def score_notes_from_network(csv_dir, num_class=False, number_of_searches=5000, 
                              save_name=False, pca=False, load=False, load_name=False, genuine_classes=None):
 
     dataset, y, pred_y = prep_dataset(csv_dir)
-    num_classes = len(set(y))
+    if not num_class:
+        num_classes = len(set(y))
+    else:
+        num_classes = num_class
 
     if load:
         num_classes = num_class
