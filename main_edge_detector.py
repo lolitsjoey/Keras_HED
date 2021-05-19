@@ -17,7 +17,7 @@ def make_directories(dir_list):
             continue
 
 def main(rgb_image_feat, scores_df):
-    load_classifier_weights_dir = './score_models_per_feature/edge' + '_' + rgb_image_feat.split('/')[-2] + '_classifier/edge.h5'
+    load_classifier_weights_dir = './gibberish.h5'
     save_classifier_weights_to = './score_models_per_feature/edge' + '_' + rgb_image_feat.split('/')[-2] + '_classifier/edge.h5'
     retrain_classifier = True
 
@@ -25,7 +25,7 @@ def main(rgb_image_feat, scores_df):
     load_score_model_weights_dir = './score_models_per_feature/edge' + '_' + rgb_image_feat.split('/')[-2]
     retrain_scoremodel = True
 
-    new_tool_outputs = False
+    new_tool_outputs = True
     tool_images_in_this_folder = rgb_image_feat
     spit_tool_output_here = '/'.join(rgb_image_feat.split('/')[0:-2]) + '/' + rgb_image_feat.split('/')[-2] + '_edges/'
     
@@ -37,7 +37,7 @@ def main(rgb_image_feat, scores_df):
     img_folder_to_test_classifier = spit_tool_output_here
 
     batchSize = 16
-    epochs = 60
+    epochs = 35
     num_classes = 2
 
     def edge(load_weights_dir, img_folder_to_classify):
@@ -69,7 +69,7 @@ def main(rgb_image_feat, scores_df):
     n_dense_neurons = backend.int_shape(model.get_layer(layer_name).output)[1]
     dense_output = pd.DataFrame(columns=range(n_dense_neurons),
                                 index=range(len(os.listdir(img_folder_to_test_classifier))))
-    dense_output, index_order = get_dense_output(dense_output, img_folder_to_test_classifier, model, layer_name, write=True,
+    dense_output, index_order = get_dense_output(dense_output, img_folder_to_test_classifier, model, layer_name, write=False,
                                     edge=True)
     ordered_scores, ordered_labels, arguments, ordered_truth = score_notes_from_network(dense_output,
                                                                                         num_classes,
@@ -79,7 +79,7 @@ def main(rgb_image_feat, scores_df):
                                                                                         pca_lam=0.2,
                                                                                         pred_splines=5,
                                                                                         pred_lam=0.2,
-                                                                                        number_of_searches=4000,
+                                                                                        number_of_searches=2000,
                                                                                         load=not retrain_scoremodel,
                                                                                         load_name=load_score_model_weights_dir,
                                                                                         save_name=save_score_model_weights_to)

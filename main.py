@@ -10,7 +10,7 @@ import tensorflow as tf
 if __name__ == '__main__':
     scored_frame = pd.DataFrame(
         index=['_'.join(note.split('_')[0:2]) for note in os.listdir('D:/scoring_and_profiling/FedSeal/')])
-    with tf.device('CPU:0'):
+    #with tf.device('CPU:0'):
         for folder in os.listdir('D:/scoring_and_profiling/'):
             if ('edges' in folder) or ('dct' in folder) or ('fft' in folder) or ('cwt' in folder):
                 continue

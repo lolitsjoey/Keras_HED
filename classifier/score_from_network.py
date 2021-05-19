@@ -109,18 +109,22 @@ def create_rand_gam(number_of_searches, new_values, pred_y, y, pca_splines, pca_
     new_values = np.append(new_values, np.array(pred_y).reshape(-1, 1), axis=1)
 
     titles = []
+    dtype_string = []
     for i in range(new_values.shape[1] - 1):
         titles.append(str(i))
         if i == 0:
             x = s(i, n_splines=pca_splines, lam=pca_lam)
         else:
             x = x + s(i, n_splines=pca_splines, lam=pca_lam)
+        dtype_string.append('numerical')
     if pred_factor:
         x = x + pygam.terms.f(i + 1, lam=pred_lam)
+        dtype_string.append('categorical')
     else:
         x = x + s(i + 1, n_splines=pred_splines, lam=pred_lam)
+        dtype_string.append('numerical')
 
-    rand_gam = LogisticGAM(x).gridsearch(new_values, y, lam=lams)
+    rand_gam = LogisticGAM(x, dtypes=dtype_string).gridsearch(new_values, y, lam=lams)
     return rand_gam, new_values, titles
 
 def plot_variables(rand_gam, new_values, titles, save_name, load):
