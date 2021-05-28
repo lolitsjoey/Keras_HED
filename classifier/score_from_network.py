@@ -94,6 +94,8 @@ def learn_transform_scores(scores, predictions, load_name, save_name, load):
             trns_score = round(slope * (- decimal.Decimal(1/scr - 1).ln() + decimal.Decimal(1/lower_b - 1).ln()),3)
             if predictions[idx] == 1:
                 trns_score = round(trns_score + (100 - trns_score) * decimal.Decimal(0.7), 3)
+            if predictions[idx] == 0:
+                trns_score = round(trns_score * decimal.Decimal(0.6), 3)
             transformed_scores.append(trns_score)
 
         scoring_df = pd.DataFrame([-decimal.Decimal(1 / lower_b - 1).ln(), -decimal.Decimal(1 / upper_b - 1).ln()])
