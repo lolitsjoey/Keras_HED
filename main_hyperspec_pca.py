@@ -88,7 +88,7 @@ def main(rgb_image_feat, scores_df):
     load_score_model_weights_dir = './score_models_per_feature/cwt' + '_' + rgb_image_feat.split('/')[-2]
     retrain_scoremodel = True
 
-    new_tool_outputs = False
+    new_tool_outputs = True
     spit_tool_output_here = '/'.join(rgb_image_feat.split('/')[0:-2]) + '/' + rgb_image_feat.split('/')[-2] + '_cwt/'
 
     make_directories([spit_tool_output_here, '/'.join(save_classifier_weights_to.split('/')[0:-1]),

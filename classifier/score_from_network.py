@@ -61,12 +61,15 @@ def learn_transform_scores(scores, predictions, load_name, save_name, load):
     if load:
         aaa = pd.read_csv(load_name + '/' + load_name.split('/')[-1] + '_extreme_scores.csv', converters={'bounds': decimal_from_value})
         slope = (100 - 0)/(aaa.values[1][0] - aaa.values[0][0])
-        for scr in scores:
+        for idx, scr in enumerate(scores):
             if scr == 1.0:
                 scr = decimal.Decimal(1) / (1 + np.exp(-decimal.Decimal(aaa.values[1][0])))
             elif scr == 0.:
                 scr = decimal.Decimal(1) / (1 + np.exp(-decimal.Decimal(aaa.values[0][0])))
-            transformed_scores.append(round(slope * (- decimal.Decimal(1 / scr - 1).ln() - aaa.values[0][0]),3))
+            trns_score = round(slope * (- decimal.Decimal(1 / scr - 1).ln() - aaa.values[0][0]),3)
+            if predictions[idx] == 1:
+                trns_score = round(trns_score + (100-trns_score) * decimal.Decimal(0.7), 3)
+            transformed_scores.append(trns_score)
     else:
         lower_b = float(min(scores) / 1.2)
         upper_b = float(max(scores) + (1 - max(scores)) * 0.1)
@@ -87,8 +90,11 @@ def learn_transform_scores(scores, predictions, load_name, save_name, load):
             print(upper_b)
             print(lower_b)
             pd.DataFrame(scores).to_csv('./GAM_model/scores.csv')
-        for scr in scores:
-            transformed_scores.append(round(slope * (- decimal.Decimal(1/scr - 1).ln() + decimal.Decimal(1/lower_b - 1).ln()),3))
+        for idx, scr in enumerate(scores):
+            trns_score = round(slope * (- decimal.Decimal(1/scr - 1).ln() + decimal.Decimal(1/lower_b - 1).ln()),3)
+            if predictions[idx] == 1:
+                trns_score = round(trns_score + (100 - trns_score) * decimal.Decimal(0.7), 3)
+            transformed_scores.append(trns_score)
 
         scoring_df = pd.DataFrame([-decimal.Decimal(1 / lower_b - 1).ln(), -decimal.Decimal(1 / upper_b - 1).ln()])
         scoring_df.columns = ['bounds']
@@ -124,7 +130,7 @@ def create_rand_gam(number_of_searches, new_values, pred_y, y, pca_splines, pca_
         x = x + s(i + 1, n_splines=pred_splines, lam=pred_lam)
         dtype_string.append('numerical')
 
-    rand_gam = LogisticGAM(x, dtypes=dtype_string).gridsearch(new_values, y, lam=lams)
+    rand_gam = LogisticGAM(x).gridsearch(new_values, y, lam=lams)
     return rand_gam, new_values, titles
 
 def plot_variables(rand_gam, new_values, titles, save_name, load):
