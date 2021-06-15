@@ -1,7 +1,7 @@
 from __future__ import print_function
 import os
 from src.utils.HED_data_parser import DataParser
-from src.networks.hed_ultrafine import hed
+from src.networks.hed_coarse import hed
 import keras
 from keras.utils import plot_model
 from keras import backend as K
@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 import random
 import albumentations as A
 import sys
+import tensorflow as tf
+
 
 
 def generate_minibatches(dataParser, train=True):
@@ -22,7 +24,7 @@ def generate_minibatches(dataParser, train=True):
         else:
             batch_ids = np.random.choice(range(len(dataParser.samples)), dataParser.batch_size_train * 2)
         ims, ems, _ = dataParser.get_batch(batch_ids)
-        yield (ims, [ems, ems, ems, ems, ems])
+        yield (ims, [ems, ems, ems, ems])
 
 
 def augmentImage(image, n):
@@ -48,7 +50,7 @@ def add_texture(img_dir, dest_dir):
         shoe = cv2.imread(img_dir + shoe_img)
         shoe = cv2.resize(shoe, (250, 250))
         shoe = shoe.ravel()
-        prc = random.choice(range(20, 100))
+        prc = random.choice(range(5, 10))
         no_white = len(shoe[shoe == 255])
         prop_array = np.array(list(np.ones(255)) + [prc * 255], dtype=int)
         shoe[shoe == 255] = random.choices(range(256), weights=prop_array, k=no_white)
@@ -70,7 +72,7 @@ def test_results(testing_dir):
 ######
 if __name__ == "__main__":
     # params
-    model_name = 'HEDSegHuge'
+    model_name = 'hed_coarse'
     model_dir = os.path.join('checkpoints', model_name)
     csv_fn = os.path.join(model_dir, 'train_log.csv')
     checkpoint_fn = os.path.join(model_dir, 'checkpoint.{epoch:02d}-{val_loss:.2f}.hdf5')
@@ -80,7 +82,7 @@ if __name__ == "__main__":
     extra_texture_truth_to = extra_texture_parent + 'gnd_truth/'
     load_weights_from = './model_dir/gibbergibber.h5'  # change this to gibberish if you
     # wanna train from scratch
-    save_model_weights_to = './model_dir/fine_weights_probably_useless.h5'
+    save_model_weights_to = './model_dir/coarse_weights_probably_useless.h5'
     lst_with_folder_names = './HED-stuff/train_pair.lst'
 
     if os.path.exists(save_model_weights_to):
@@ -111,24 +113,24 @@ if __name__ == "__main__":
     else:
         print('Continuing with existing training set: {}'.format(extra_texture_images_to))
 
-    batch_size_train = 10
-    dataParser = DataParser(batch_size_train, lst_with_folder_names, extra_texture_parent, extra_texture_images_to)
-
-    # model
-    model = hed(load_weights_from)
-    #model = hed()
-    checkpointer = callbacks.ModelCheckpoint(filepath=checkpoint_fn, verbose=1, save_best_only=True)
-    csv_logger = callbacks.CSVLogger(csv_fn, append=True, separator=';')
-    tensorboard = callbacks.TensorBoard(log_dir=model_dir, histogram_freq=2, batch_size=batch_size_train,
-                                        write_graph=False, write_grads=True, write_images=False)
-    train_history = model.fit(
-        generate_minibatches(dataParser, ),
-        # max_q_size=40, workers=1,
-        steps_per_epoch=dataParser.steps_per_epoch,  # batch size
-        epochs=4,
-        validation_data=generate_minibatches(dataParser, train=False),
-        validation_steps=dataParser.validation_steps,
-        callbacks=[checkpointer, csv_logger, tensorboard])
-
-    print(train_history)
-    model.save_weights(save_model_weights_to)
+    # batch_size_train = 10
+    # dataParser = DataParser(batch_size_train, lst_with_folder_names, extra_texture_parent, extra_texture_images_to)
+    #
+    # # model
+    # model = hed(load_weights_from)
+    # #model = hed()
+    # checkpointer = callbacks.ModelCheckpoint(filepath=checkpoint_fn, verbose=1, save_best_only=True)
+    # csv_logger = callbacks.CSVLogger(csv_fn, append=True, separator=';')
+    # tensorboard = callbacks.TensorBoard(log_dir=model_dir, histogram_freq=2, batch_size=batch_size_train,
+    #                                     write_graph=False, write_grads=True, write_images=False)
+    # train_history = model.fit(
+    #     generate_minibatches(dataParser, ),
+    #     # max_q_size=40, workers=1,
+    #     steps_per_epoch=dataParser.steps_per_epoch,  # batch size
+    #     epochs=4,
+    #     validation_data=generate_minibatches(dataParser, train=False),
+    #     validation_steps=dataParser.validation_steps,
+    #     callbacks=[checkpointer, csv_logger, tensorboard])
+    #
+    # print(train_history)
+    # model.save_weights(save_model_weights_to)

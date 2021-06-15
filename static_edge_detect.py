@@ -46,11 +46,11 @@ def main(rgb_image_feat, scores_df):
     load_classifier_weights_dir = './temp_models_in_progress/edge' + '_' + rgb_image_feat.split('/')[
         -2] + '_classifier/edge.h5'
     load_classifier_weights_dir = './temp_models_in_progress/edge_all_classifier/asdasdaedge.h5'
-    retrain_classifier = True
+    retrain_classifier = False
 
     save_score_model_weights_to = './temp_models_in_progress/edge' + '_' + rgb_image_feat.split('/')[-2]
     load_score_model_weights_dir = './temp_models_in_progress/edge' + '_' + rgb_image_feat.split('/')[-2]
-    load_score_model_weights_dir = './temp_models_in_progress/edge_all_64f17'
+    load_score_model_weights_dir = './Permanent Well Trained Models/stripe model multi input lbp with aug/edge_Stripe_classifier/edge.h5'
     retrain_scoremodel = True
 
     new_tool_outputs = False

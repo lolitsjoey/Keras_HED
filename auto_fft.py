@@ -40,7 +40,7 @@ def loadTestData(testInputPath):
 
     return inputImages, files
 
-def loadModel(load_tool_weights_from):
+def load_fft_model(load_tool_weights_from):
 
     loadedModel = Denoise()
     loadedModel.build((32000, 128, 128, 1))

@@ -38,7 +38,7 @@ def loadTestData(testInputPath):
     inputImages = np.expand_dims(np.array([loadImage(str(file_name)) for file_name in inputImageSet]), axis=-1)
     return inputImages, files
 
-def loadModel(load_tool_weights_from):
+def load_dct_model(load_tool_weights_from):
 
     loadedModel = Denoise()
     loadedModel.build((32000, 64, 64, 1))

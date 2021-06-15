@@ -19,14 +19,17 @@ def get_batches(hyperspec_destination, wavelet, batch_size, scales, num_segs, do
     search_string = 'genuine'
     gen_segs = parse_hyperspec_lists(hyperspec_destination, search_string, num_segs, plot=plot)
     gen_labels = []
+    all_note_labels = []
     for idx, seg in enumerate(gen_segs.keys()):
-        gen_labels = gen_labels + [num_segs - int(str(seg).split(' ')[-1])]
+        gen_labels = gen_labels + [int(str(seg).split('_')[-1])]
+        all_note_labels += [seg]
 
     search_string = 'counterfeit'
     cft_segs = parse_hyperspec_lists(hyperspec_destination, search_string, num_segs, plot=plot)
     cft_labels = []
     for idx, seg in enumerate(cft_segs.keys()):
-        cft_labels = cft_labels + [num_segs - int(str(seg).split(' ')[-1]) + max(gen_labels) + 1]
+        cft_labels = cft_labels + [num_segs + int(str(seg).split('_')[-1])]
+        all_note_labels += [seg]
 
     all_labels = np.array(gen_labels + cft_labels)
     all_segs = np.full((len(all_labels),224),0, dtype=float)
@@ -39,7 +42,9 @@ def get_batches(hyperspec_destination, wavelet, batch_size, scales, num_segs, do
     all_segs = all_segs[:,:,None]
     x_train, x_test, y_train, y_test = train_test_split(all_segs, all_labels, test_size=0.2, random_state=42)
     x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.2, random_state=42)
-
+    x_lab_train, x_lab_test, y_lab_train, y_lab_test = train_test_split(all_note_labels, all_labels, test_size=0.2, random_state=42)
+    x_lab_train, x_lab_val, y_lab_train, y_lab_val = train_test_split(x_lab_train, y_lab_train, test_size=0.2, random_state=42)
+    index_order = x_lab_train + x_lab_val + x_lab_test
     # amount of pixels in X and Y
     rescale_size = 64
     # determine the max scale size
@@ -52,11 +57,11 @@ def get_batches(hyperspec_destination, wavelet, batch_size, scales, num_segs, do
     x_test_cwt = create_cwt_images(x_test, rescale_size,  scales, wavelet)
     x_val_cwt = create_cwt_images(x_val, rescale_size, scales, wavelet)
 
-    train_batches = Inline_Generator(x_train_cwt, y_train, batch_size)
-    test_batches = Inline_Generator(x_test_cwt, y_test, batch_size)
-    val_batches = Inline_Generator(x_val_cwt, y_val, batch_size)
+    train_batches = Inline_Generator(x_train_cwt, y_train, batch_size, num_segs)
+    test_batches = Inline_Generator(x_test_cwt, y_test, batch_size, num_segs)
+    val_batches = Inline_Generator(x_val_cwt, y_val, batch_size, num_segs)
 
-    return x_train_cwt, x_test_cwt, x_val_cwt, y_train, y_test, y_val, train_batches, test_batches, val_batches
+    return x_train_cwt, x_test_cwt, x_val_cwt, y_train, y_test, y_val, train_batches, test_batches, val_batches, index_order
 
 def get_batches_pca_style(hyperspec_destination, batch_size):
     counter_cwt = pd.read_csv(hyperspec_destination + '/pca_frame_counterfeit.csv', index_col=0)
@@ -69,9 +74,9 @@ def get_batches_pca_style(hyperspec_destination, batch_size):
     all_labels = to_categorical(all_labels)
     x_train, x_test, y_train, y_test = train_test_split(all_arrays, all_labels, test_size=0.2)
     x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.2)
-    train_batches = Inline_Generator(x_train, y_train, batch_size)
-    test_batches = Inline_Generator(x_test, y_test, batch_size)
-    val_batches = Inline_Generator(x_val, y_val, batch_size)
+    train_batches = Inline_Generator(x_train, y_train, batch_size, num_segs)
+    test_batches = Inline_Generator(x_test, y_test, batch_size, num_segs)
+    val_batches = Inline_Generator(x_val, y_val, batch_size, num_segs)
 
     return x_train, x_test, x_val, y_train, y_test, y_val, train_batches, test_batches, val_batches
 
@@ -79,22 +84,16 @@ def compile_and_fit_model(model, train_batches, val_batches, n_epochs):
     # compile the model
     model.compile(
         optimizer=tf.keras.optimizers.Adam(),
-        loss='sparse_categorical_crossentropy',
-        metrics=['sparse_categorical_accuracy'])
-
-    history = model.fit(x=train_batches,
-                        epochs=n_epochs,
-                        verbose=1,
-                        validation_data=val_batches
-                        )
-
-    return model, history
+        loss='categorical_crossentropy',
+        metrics=['categorical_accuracy'])
+    return model
 
 class Inline_Generator(keras.utils.Sequence):
     def __init__(self, X_train, y_train, batch_size, num_segs):
         self.x_train = X_train
         self.y_train = np.array(y_train)
         self.batchSize = batch_size
+        self.num_segs = num_segs
 
     def __len__(self):
         return (np.ceil(len(self.x_train) / float(self.batchSize))).astype(np.int)
@@ -102,7 +101,7 @@ class Inline_Generator(keras.utils.Sequence):
     def __getitem__(self, idx):
         batch_x = self.x_train[idx * self.batchSize: (idx + 1) * self.batchSize]
         batch_y = self.y_train[idx * self.batchSize: (idx + 1) * self.batchSize]
-        batch_x = batch_x[:,:,None]
+
         batch_y = to_categorical(batch_y, self.num_segs*2)
         return batch_x, batch_y
 
@@ -139,16 +138,35 @@ def build_seq_model(num_segs, feature_vec_length, rnn_neurons, dense_neurons):
 
 
 
-def build_and_fit_xgb_model(X_train, y_train, X_test, y_test, n_depth, subsample, n_estimators, num_segs):
+def build_and_fit_xgb_model(X_train, y_train, X_test, y_test, X_val, y_val, n_depth, subsample, n_estimators, num_segs):
+    from sklearn.decomposition import PCA
+    x_train_pca = []
+    for xx in X_train:
+        pca = PCA(n_components=1)
+        x_train_pca.append(pca.fit_transform(xx[:,:,0]))
+    x_train_pca = np.array(x_train_pca)[:,:,0]
+
+    x_test_pca = []
+    for xx in X_test:
+        pca = PCA(n_components=1)
+        x_test_pca.append(pca.fit_transform(xx[:, :, 0]))
+    x_test_pca = np.array(x_test_pca)[:,:,0]
+
+    x_val_pca = []
+    for xx in X_val:
+        pca = PCA(n_components=1)
+        x_val_pca.append(pca.fit_transform(xx[:, :, 0]))
+    x_val_pca = np.array(x_val_pca)[:, :, 0]
+
     xgb_model = xgb.XGBClassifier(max_depth=n_depth,
                               objective='multi:softmax', # error evaluation for multiclass training
                               num_class=num_segs*2,
                               subsample=subsample, # randomly selected fraction of training samples that will be used to train each tree.
                               use_label_encoder=False,
                               n_estimators=n_estimators)
-    eval_set = [(X_train, y_train), (X_test, y_test)]
-    history = xgb_model.fit(X_train, y_train, eval_metric=["merror"], eval_set=eval_set,verbose=True)
-    return xgb_model, history
+    eval_set = [(x_train_pca, y_train), (x_test_pca, y_test)]
+    history = xgb_model.fit(x_train_pca, y_train, eval_metric=["merror"], eval_set=eval_set,verbose=True)
+    return xgb_model, history, np.vstack((x_train_pca, x_val_pca, x_test_pca))
 
 
 

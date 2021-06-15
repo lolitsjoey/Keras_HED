@@ -16,6 +16,7 @@ import pygam
 from pygam.datasets import wage, toy_interaction
 from pygam import LinearGAM, LogisticGAM, s, f
 import numpy as np
+import random
 import pandas as pd
 from sklearn.decomposition import PCA
 import os
@@ -64,12 +65,12 @@ def make_directories(dir_list):
 
 def main(rgb_image_feat, scores_df):
 
-    save_classifier_weights_to = './temp_models_in_progress/really good trs seal yes aug classifier/edge.h5'
-    load_classifier_weights_dir = './temp_models_in_progress/really good trs seal yes aug classifier/edge.h5'
+    save_classifier_weights_to = './temp_models_in_progress/paper_type_model yes aug classifier/edge.h5'
+    load_classifier_weights_dir = './temp_models_in_progress/paper_type_model yes aug classifier/edge.h5'
     retrain_classifier = False
 
-    save_score_model_weights_to = './temp_models_in_progress/edge_scoremodel_trsSeal_test_aug'
-    load_score_model_weights_dir = './temp_models_in_progress/edge_scoremodel_trsSeal_test_aug'
+    save_score_model_weights_to = './paper_models_2/paper_type_model'
+    load_score_model_weights_dir = './paper_models_2/paper_type_model'
     retrain_scoremodel = True
 
     new_tool_outputs = False
@@ -81,8 +82,8 @@ def main(rgb_image_feat, scores_df):
 
     load_tool_weights_from = './model_dir/fine_weights_probably_useless.h5'
 
-    img_folder_to_classify = ['D:/scoring_and_profiling/TrsSealCrest_aug/', 'D:/scoring_and_profiling/TrsSealTeeth_edges_aug/']
-    img_folder_to_test_classifier = ['D:/scoring_and_profiling/TrsSealCrest_aug/', 'D:/scoring_and_profiling/TrsSealTeeth_edges_aug/']
+    img_folder_to_classify = ['D:/scoring_and_profiling/WtrMrk_aug/', 'D:/scoring_and_profiling/NoteLoc_aug/']
+    img_folder_to_test_classifier = ['D:/scoring_and_profiling/WtrMrk_aug/', 'D:/scoring_and_profiling/NoteLoc_aug/']
     #'rnn_neurons': 150, 'dense_neurons': 19, 'radius': 3.63, 'points': 4
     batchSize = 40
     rnn_neurons = 150
@@ -97,11 +98,24 @@ def main(rgb_image_feat, scores_df):
     def edge(load_weights_dir, img_folder_to_classify):
         if new_tool_outputs:
             tool_this_folder(load_tool_weights_from, tool_images_in_this_folder, spit_tool_output_here)
-        x_train, x_test, x_val, y_train, y_test, y_val = prepare_data(img_folder_to_classify[0], seed=420)
-        x_train_2, x_test_2, x_val_2, y_train_2, y_test_2, y_val_2 = prepare_data(img_folder_to_classify[1], seed=420)
-        x_train_total = np.array(list(zip(x_train, x_train_2)))
-        x_test_total = np.array(list(zip(x_test, x_test_2)))
-        x_val_total = np.array(list(zip(x_val, x_val_2)))
+        wtrmrk_names =  ['_'.join(img.split('_')[0:6]) for img in os.listdir(img_folder_to_classify[0])]
+        acceptable_notes = ['_'.join(noteLoc.split('_')[0:6]) for noteLoc in os.listdir(img_folder_to_classify[1]) if '_'.join(noteLoc.split('_')[0:6]) in wtrmrk_names]
+        acceptable_wtrmrks = [img_folder_to_classify[0] + img for img in os.listdir(img_folder_to_classify[0]) if '_'.join(img.split('_')[0:6]) in acceptable_notes]
+        acceptable_noteLoc = [img_folder_to_classify[1] + img for img in os.listdir(img_folder_to_classify[1]) if '_'.join(img.split('_')[0:6]) in acceptable_notes]
+        truth = [1 if 'genuine' in note else 0 for note in acceptable_notes]
+        x_train, x_test, y_train, y_test = train_test_split(acceptable_wtrmrks, truth, test_size=0.2, random_state=420)
+        x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.25, random_state=420)
+
+        y_train = to_categorical(y_train)
+        y_test = to_categorical(y_test)
+        y_val = to_categorical(y_val)
+
+        x_train2, x_test2, y_train2, y_test2 = train_test_split(acceptable_noteLoc, truth, test_size=0.2, random_state=420)
+        x_train2, x_val2, y_train2, y_val2 = train_test_split(x_train2, y_train2, test_size=0.25, random_state=420)
+
+        x_train_total = np.array(list(zip(x_train, x_train2)))
+        x_test_total = np.array(list(zip(x_test, x_test2)))
+        x_val_total = np.array(list(zip(x_val, x_val2)))
         train_batches, test_batches, val_batches = grab_batches_with_generator(x_train_total, x_test_total, x_val_total,
                                                                                y_train, y_test, y_val, batchSize, blur=False, lbp=False, lbp_class=lbp_class, multichannel=True)
         #model = classify_rnn_2d(load_weights_dir, rnn_neurons, dense_neurons, feature_vec_length)
@@ -111,6 +125,10 @@ def main(rgb_image_feat, scores_df):
     x_train, x_test, x_val, y_train, y_test, y_val, train_batches, test_batches, val_batches, model = edge(
         load_classifier_weights_dir, img_folder_to_classify)
 
+    x_all_0 = np.hstack((x_train[:,0], x_test[:,0], x_val[:,0]))
+    x_all_1 = np.hstack((x_train[:,1], x_test[:, 1], x_val[:, 1]))
+    y_all = np.vstack((y_train, y_test, y_val))
+
     if retrain_classifier:
         history = model.fit(x=train_batches,
                             epochs=epochs,
@@ -119,37 +137,39 @@ def main(rgb_image_feat, scores_df):
                             )
         model.save_weights(save_classifier_weights_to)
 
-    print('Evaluating Model...')
-    loss, accuracy = model.evaluate(test_batches)
-    print('Accuracy: %.2f' % (accuracy * 100))
+    # print('Evaluating Model...')
+    # loss, accuracy = model.evaluate(test_batches)
+    # print('Accuracy: %.2f' % (accuracy * 100))
 
     layer_name = [layer.name for layer in model.layers][-2]
     n_dense_neurons = backend.int_shape(model.get_layer(layer_name).output)[1]
     dense_output = pd.DataFrame(columns=range(n_dense_neurons),
-                                index=range(len(os.listdir(img_folder_to_test_classifier[0]))))
-    # if not retrain_classifier:
-    #     dense_output = pd.read_csv('./intermediate_output.csv')
-    # else:
-    dense_output, index_order = get_dense_output_6d(dense_output, img_folder_to_test_classifier, model, layer_name,
-                                                 write=True,
-                                                 edge=True,
-                                                 TEMP=True,
-                                                 lbp_class=lbp_class)
+                                index=range(len(y_all)))
+    if not retrain_classifier:
+        dense_output = pd.read_csv('./intermediate_output_immut.csv', index_col=0)
+    else:
+        dense_output, index_order = get_dense_output_6d(dense_output, x_all_0, x_all_1, model, layer_name,
+                                                     write=True,
+                                                     edge=True,
+                                                     TEMP=True,
+                                                     lbp_class=lbp_class)
 
 
-    ordered_scores, ordered_labels, arguments, ordered_truth = score_notes_from_network(dense_output,
-                                                                                        num_classes,
-                                                                                        genuine_classes=[1],
-                                                                                        pca_quality=4,
-                                                                                        pca_splines=20,
-                                                                                        pca_lam=0.05,
-                                                                                        pred_splines=5,
-                                                                                        pred_lam=0.2,
-                                                                                        number_of_searches=200,
-                                                                                        load=not retrain_scoremodel,
-                                                                                        load_name=load_score_model_weights_dir,
-                                                                                        save_name=save_score_model_weights_to,
-                                                                                        confidence=True)
+    for i in range(40):
+        dense_output = pd.read_csv('./intermediate_output_immut.csv', index_col=0)
+        ordered_scores, ordered_labels, arguments, ordered_truth = score_notes_from_network(dense_output,
+                                                                                            num_classes,
+                                                                                            genuine_classes=[1],
+                                                                                            pca_quality=0.999,
+                                                                                            pca_splines=20,
+                                                                                            pca_lam=random.choice([0.05, 0.06, 0.07, 0.08, 0.09, 0.1]),
+                                                                                            pred_splines=5,
+                                                                                            pred_lam=0.4,
+                                                                                            number_of_searches=200,
+                                                                                            load=not retrain_scoremodel,
+                                                                                            load_name=load_score_model_weights_dir,
+                                                                                            save_name=save_score_model_weights_to,
+                                                                                            confidence=True)
 
     # dense_output,
     # num_classes,
@@ -167,7 +187,7 @@ def main(rgb_image_feat, scores_df):
     scores_in_order_of_index_order = ordered_scores[np.argsort(arguments)]
     please_work = pd.DataFrame(index=index_order, columns=['scores'])
     please_work['scores'] = scores_in_order_of_index_order
-    please_work.to_csv('./pleeeeeease2.csv')
+    please_work.to_csv('./pleeeeeease3.csv')
 
     # y = np.array(dense_output['truth'])
     # del dense_output['truth']
@@ -266,7 +286,7 @@ def create_rand_gam(number_of_searches, new_values, y, pca_splines, pca_lam):
     rand_gam = LogisticGAM(x).gridsearch(np.array(new_values), y, lam=lams)
     return rand_gam, new_values, titles
 
-def get_dense_output(dense_df, img_folder_to_classify, model, layer_name, imShape = (480,480), write = False, edge=False, dct=False, TEMP=False, lbp_class=None):
+def get_dense_output(dense_df, array_of_images, model, layer_name, imShape = (480,480), write = False, edge=False, dct=False, TEMP=False, lbp_class=None):
     predictions = []
     truth = []
     index_order = []
@@ -310,18 +330,17 @@ def get_dense_output(dense_df, img_folder_to_classify, model, layer_name, imShap
 
     return dense_df, index_order
 
-def get_dense_output_6d(dense_df, img_folder_to_classify, model, layer_name, imShape = (480,480), write = False, edge=False, dct=False, TEMP=False, lbp_class=None):
+def get_dense_output_6d(dense_df, img_folder_to_classify, img_folder_to_classify2, model, layer_name, imShape = (480,480), write = False, edge=False, dct=False, TEMP=False, lbp_class=None):
     predictions = []
     truth = []
     index_order = []
-    for idx, (img_0, img_1) in enumerate(
-            zip(os.listdir(img_folder_to_classify[0]), os.listdir(img_folder_to_classify[1]))):
+    for idx, (img_0, img_1) in enumerate(zip(img_folder_to_classify, img_folder_to_classify2)):
         if idx == 0:
             print(img_0)
         if TEMP:
-            test_img_0 = cv2.resize(cv2.imread(img_folder_to_classify[0] + img_0, 1), imShape)
+            test_img_0 = cv2.resize(cv2.imread(img_0, 1), imShape)
             test_img_0 = ((test_img_0 - np.mean(test_img_0)) / np.std(test_img_0))
-            test_img_1 = cv2.resize(cv2.imread(img_folder_to_classify[1] + img_1, 1), imShape)
+            test_img_1 = cv2.resize(cv2.imread(img_1, 1), imShape)
             test_img_1 = ((test_img_1 - np.mean(test_img_1)) / np.std(test_img_1))
 
             model_input = np.concatenate((test_img_0, test_img_1), axis=2)[None,:,:,:]

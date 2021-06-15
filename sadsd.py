@@ -1,20 +1,24 @@
 import os
 import cv2
 import matplotlib.pyplot as plt
+import numpy as np
 
 def crop_stripe(stripe):
     #2200:2600      STRIPE ZOOM
     #1234:1234+465  STRIPE BRIDGE NO ZOOM
+    #300:830, 300:800 TRSSEAL CREST
+    #830::,             TRSSEAL TEETH
+    #trs_seal_ids = np.hstack( (np.arange(0,300), np.arange(830, cv2.imread(stripe_folder + stripe).shape[0])) )
     cut_zoom_stripe = cv2.imread(stripe_folder + stripe)[300:830, 300:800, :]
-    #zoom_fac = 0.25
-    #cut_zoom_stripe = cut_zoom_stripe[:,
-    #                  int(cut_zoom_stripe.shape[1] * zoom_fac):int(cut_zoom_stripe.shape[1] * (1 - zoom_fac))]
+    zoom_fac = 0.25
+    cut_zoom_stripe = cut_zoom_stripe[:,
+                      int(cut_zoom_stripe.shape[1] * zoom_fac):int(cut_zoom_stripe.shape[1] * (1 - zoom_fac))]
     return cut_zoom_stripe
 
 stripe_folder = 'D:/scoring_and_profiling/TrsSeal/'
 for stripe in os.listdir(stripe_folder):
     cropped_stripe = crop_stripe(stripe)
-    cv2.imwrite('D:/scoring_and_profiling/TrsSealCrest/' + stripe, cropped_stripe)
+    cv2.imwrite('D:/scoring_and_profiling/TrsSealTeeth/' + stripe, cropped_stripe)
 
 #
 # edge_stripe_crop = 'D:/edges_here/'

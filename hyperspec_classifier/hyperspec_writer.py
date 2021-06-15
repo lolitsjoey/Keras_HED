@@ -9,6 +9,8 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from hyperspec_classifier.notemethods import straightenHS
 import pandas as pd
+
+
 class HyperSpecImage:
     def __init__(self, pathHDR, pathRAW, bString=False, rotation=-1, hFlip=False, vFlip=False):
         self.status      = False
@@ -175,6 +177,64 @@ def extractMasks(labels, seg):
     mask[on] = 1
     mask[off] = 0
     return mask
+
+
+def write_hyper_spec_from_array(folder_of_folders, hyperspec_destination, num_segs, fileString, scales, wavelet, feature, do_pca=False):
+    kk = 0
+    for img_num, img_folder in enumerate(os.listdir(folder_of_folders)):
+        noteDir = folder_of_folders + img_folder
+        if '_' + feature + '.' not in noteDir:
+            continue
+        hsSample = np.load(noteDir)
+        try:
+            arrMod = flattenHSToDataFrame(hsSample)
+        except Exception:
+            print(hsSample.shape)
+            print(noteDir)
+            print(img_folder)
+            print(folder_of_folders)
+        labels = runKMeans(arrMod, num_segs)
+
+        globalMean = np.mean(arrMod, axis=0)
+        smooth = savgol_filter(globalMean, 201, 2)
+
+        hyper_arr = np.zeros((len(np.unique(labels)), 224))
+        peak = []
+        for idx, label in enumerate(np.unique(labels)):
+
+            for band in range(224):
+                hyper_arr[idx, band] = np.mean(arrMod[labels == label, band]) - smooth[band]
+            peak.append(np.max(hyper_arr[idx, :]))
+
+        order = np.argsort(peak)
+        # labels = reorder_labels(labels, order)
+
+        for true_seg, seg in enumerate(order):
+            with open(hyperspec_destination + './{}_{}_{}_{}_{}.txt'.format(folder_of_folders.split('/')[-2][0:-4], kk, true_seg, fileString, feature),
+                      'w+') as output:
+                output.write(str(hyper_arr[seg, :]))
+
+            mask = extractMasks(labels, seg)
+            labelIm = restoreArrayToImage(mask, hsSample)
+            overlay = displayOverlay(hsSample[:, :, 70], labelIm)
+            cv2.imwrite(
+                hyperspec_destination + 'rgb/{}_{}_{}_{}_{}.bmp'.format(folder_of_folders.split('/')[-2][0:-4], kk, true_seg, fileString, feature),
+                overlay * 255)
+
+            coeffs, freqs = pywt.cwt(hyper_arr[seg, :], scales, wavelet)
+            old_value = coeffs
+            old_min = np.min(coeffs)
+            old_max = np.max(coeffs)
+            new_min = 0
+            new_max = 256.
+            new_value = ((old_value - old_min) / (old_max - old_min)) * (new_max - new_min) + new_min
+            new_value = np.array(new_value, dtype='uint8')
+            im_color = cv2.applyColorMap(new_value, cv2.COLORMAP_HOT)
+            cv2.imwrite(
+                hyperspec_destination + 'cwt/{}_{}_{}_{}_{}_waves.bmp'.format(folder_of_folders.split('/')[-2][0:-4], kk, true_seg, fileString, feature),
+                im_color)
+        kk += 1
+
 
 def write_hyper_spec(folder_of_folders, hyperspec_destination, num_segs, fileString, scales, wavelet, do_pca=False):
     if do_pca:

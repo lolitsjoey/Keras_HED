@@ -1,5 +1,6 @@
 import main_hyperspec_pca
 import main_autodct_analysis
+import main_hyperspec_analysis
 import main_autofft_analysis
 import main_edge_detector
 import pandas as pd
@@ -21,7 +22,7 @@ if __name__ == '__main__':
             continue
         folder_to_score = 'D:/scoring_and_profiling/' + folder + '/'
         print('-------' + folder_to_score + '--------')
-        #scored_frame = main_hyperspec_pca.main(folder_to_score, scored_frame)
+        scored_frame = main_hyperspec_analysis.main(folder_to_score, scored_frame, folder_index)
         scored_frame = main_autodct_analysis.main(folder_to_score, scored_frame)
         scored_frame = main_autofft_analysis.main(folder_to_score, scored_frame)
         scored_frame = main_edge_detector.main(folder_to_score, scored_frame)

@@ -15,6 +15,17 @@ from sklearn.linear_model import LogisticRegression
 import decimal
 import math
 import warnings
+from sklearn.metrics import confusion_matrix
+
+def load_score_model(load_name):
+    with open(load_name + '/' + load_name.split('/')[-1] + '_model.pkl', 'rb') as f:
+        rand_gam = pickle.load(f)
+
+    with open(load_name + '/' + load_name.split('/')[-1] + '_pca.pkl', 'rb') as f:
+        pca = pickle.load(f)
+
+    return rand_gam, pca
+
 
 def save_model(save_name, rand_gam, pca):
     if os.path.exists(save_name):
@@ -76,9 +87,12 @@ def learn_transform_scores(scores, predictions, load_name, save_name, load):
 
         if lower_b == 0.:
             print('Log GAM or approximation almost definitly overfit')
+            decimal.getcontext().prec = abs(int(math.floor(math.log10(upper_b)))) + 5
             lower_b = 1 - decimal.Decimal(upper_b)
             scores[scores <= lower_b] = lower_b
-        decimal.getcontext().prec = abs(int(math.floor(math.log10(lower_b)))) + 5
+        else:
+            decimal.getcontext().prec = abs(int(math.floor(math.log10(lower_b)))) + 5
+
         if upper_b == 1.0:
             print('Log GAM or approximation almost definitly overfit')
             upper_b = 1 - decimal.Decimal(lower_b)
@@ -166,7 +180,19 @@ def print_stats(rand_gam, ordered_scores, ordered_labels, ordered_truth, new_val
         crit_cft = max(cft_scores)
         print('highest_scoring_counterfeit: {}: {}'.format(np.where(ordered_scores == crit_cft)[0][0],
                                                        max(cft_scores)))
-    print('Model Accuracy: {}'.format(rand_gam.accuracy(new_values, y)))
+    try:
+        print('Model Accuracy: {}'.format(rand_gam.accuracy(new_values, y)))
+    except AttributeError:
+        num_correct = 0
+        gen_cft_correct = 0
+        for idx,lab in enumerate(ordered_labels):
+            if lab == ordered_truth[idx]:
+                num_correct += 1
+            if ((ordered_truth[idx] < 4) & (lab < 4)) or ((ordered_truth[idx] >= 4) & (lab >= 4)):
+                gen_cft_correct += 1
+        print('Model Accuracy Segments: {}'.format(num_correct/len(ordered_labels)))
+        print('Model Accuracy CftGen: {}'.format(gen_cft_correct / len(ordered_labels)))
+
 
 def clean_directories():
     shutil.rmtree('C:/Users/joeba/Documents/github/Keras_HED/GAM_model/scored/rgb/')
@@ -231,15 +257,15 @@ def multinomial_glm(pca, new_values, y, pred_y, save_name, load_name, num_classe
     # TODO MAYBE SOME CLEVER ENSEMBLE CHOICE HERE
 
     class_guess_gam = np.argmax(scores_pre, axis=1)
-    wrong_rows_log = [i for i in range(len(y)) if class_guess_gam[i] != y[i]]
+    #wrong_rows_log = [i for i in range(len(y)) if class_guess_gam[i] != y[i]]
 
     class_guess = np.array(pred_y)
-    wrong_rows_classifier = [i for i in range(len(y)) if class_guess[i] != y[i]]
+    #wrong_rows_classifier = [i for i in range(len(y)) if class_guess[i] != y[i]]
 
-    ii = np.array(wrong_rows_classifier)
-    print(
-        'Incorrect Rows Classifier: {}, the log has {}'.format(wrong_rows_classifier, scores_pre[ii, np.array(y)[ii]]))
-    print('Incorrect Rows Logistic: {}'.format(wrong_rows_log))
+    # ii = np.array(wrong_rows_classifier)
+    # print(
+    #     'Incorrect Rows Classifier: {}, the log has {}'.format(wrong_rows_classifier, scores_pre[ii, np.array(y)[ii]]))
+    # print('Incorrect Rows Logistic: {}'.format(wrong_rows_log))
 
     scores = []
     for idx, clss in enumerate(class_guess):
@@ -251,12 +277,15 @@ def multinomial_glm(pca, new_values, y, pred_y, save_name, load_name, num_classe
         save_name = save_model(save_name, rand_gam, pca)
 
     ordered_scores, ordered_labels, arguments = learn_transform_scores(scores, class_guess, load_name, save_name, load)
+    ordered_truth = np.array(y)[arguments]
+    if not load:
+        print_stats(rand_gam, ordered_scores, ordered_labels, ordered_truth, new_values, y)
 
     return ordered_scores, ordered_labels, arguments, np.array(y)[arguments]
 
 
-def logistic_gam(pca, new_values, y, pred_y,number_of_searches, pca_splines, pca_lam,
-                             pred_lam, pred_splines, pred_factor, save_name, load, load_name, rand_gam=False):
+def logistic_gam(pca, new_values, y, pred_y, number_of_searches, pca_splines, pca_lam,
+                             pred_lam, pred_splines, pred_factor, save_name, load, load_name, rand_gam=False, confidence=True):
     if not load:
         rand_gam, new_values, titles = create_rand_gam(number_of_searches, new_values, pred_y, y,
                                                        pca_splines, pca_lam, pred_splines, pred_lam, pred_factor)
@@ -269,7 +298,10 @@ def logistic_gam(pca, new_values, y, pred_y,number_of_searches, pca_splines, pca
         new_values = np.append(new_values, np.array(pred_y).reshape(-1, 1), axis=1)
 
     scores = rand_gam.predict_proba(new_values)
-    predictions = np.array(rand_gam.predict(new_values), dtype=np.int)
+    if confidence:
+        predictions = np.array(rand_gam.predict(new_values), dtype=np.int)
+    else:
+        predictions = np.array(pred_y)
     ordered_scores, ordered_labels, arguments = learn_transform_scores(scores, predictions, load_name, save_name, load)
 
     titles = []
@@ -286,7 +318,7 @@ def logistic_gam(pca, new_values, y, pred_y,number_of_searches, pca_splines, pca
 
 def score_notes_from_network(csv_dir, num_class=False, number_of_searches=5000, pca_quality=0.99, pca_splines=20, pca_lam=0.4,
                              pred_lam=0.02, pred_splines=50, pred_factor=True,
-                             save_name=False, pca=False, load=False, load_name=False, genuine_classes=None):
+                             save_name=False, pca=False, load=False, load_name=False, genuine_classes=None, confidence=True):
 
     dataset, y, pred_y = prep_dataset(csv_dir)
     if not num_class:
@@ -318,7 +350,7 @@ def score_notes_from_network(csv_dir, num_class=False, number_of_searches=5000, 
         ordered_scores, ordered_labels, arguments, ordered_truth = logistic_gam(pca, new_values, y, pred_y,
                                                                                 number_of_searches, pca_splines, pca_lam,
                                                                                 pred_lam, pred_splines, pred_factor,
-                                                                                save_name, load, load_name, rand_gam)
+                                                                                save_name, load, load_name, rand_gam, confidence=confidence)
 
     return ordered_scores, ordered_labels, arguments, ordered_truth
 

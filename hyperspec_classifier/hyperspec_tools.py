@@ -101,13 +101,13 @@ def build_cnn_model(activation, input_shape, num_classes):
     model.add(MaxPooling2D())
     model.add(Conv2D(64, 5, activation=activation, padding='same', kernel_initializer="he_normal"))
     model.add(MaxPooling2D())
-    model.add(Conv2D(128, 5, activation=activation, padding='same', kernel_initializer="he_normal"))
-    model.add(MaxPooling2D())
+    # model.add(Conv2D(128, 5, activation=activation, padding='same', kernel_initializer="he_normal"))
+    # model.add(MaxPooling2D())
     model.add(Flatten())
 
     # 3 Full connected layer
     model.add(Dense(128, activation=tf.keras.layers.LeakyReLU(), kernel_initializer="he_normal"))
-    model.add(Dense(54, activation=activation, kernel_initializer="he_normal"))
+    model.add(Dense(64, activation=activation, kernel_initializer="he_normal"))
     model.add(Dense(num_classes, activation='softmax'))  # 6 classes
 
     # summarize the model

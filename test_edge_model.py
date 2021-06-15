@@ -1,5 +1,5 @@
 import os
-from src.networks.hed_ultrafine import hed
+#from src.networks.hed_ultrafine import hed_refined
 from src.networks.hed_reduced import hed
 from skimage.feature import hog
 
@@ -12,7 +12,7 @@ import time
 
 def tool_this_folder(load_weights_from, test_images_in_this_folder, spit_edge_maps_here):
     model = hed(load_weights_from)
-    #model = hed()
+    #model = hed_refined(load_weights_from)
     for img in os.listdir(test_images_in_this_folder):
         if '_edges' in img:
             continue
@@ -22,15 +22,15 @@ def tool_this_folder(load_weights_from, test_images_in_this_folder, spit_edge_ma
         except Exception:
             print(test_images_in_this_folder + img)
         predict_edge = model.predict(resized_img[None, :, :, :])
-        cv2.imwrite(spit_edge_maps_here + img[0:-4] + '_edges.jpg', predict_edge[0][0, :, :, 0] * 255)
+        cv2.imwrite(spit_edge_maps_here + img[0:-4] + '_edges.bmp', predict_edge[0][0, :, :, 0] * 255)
 
 if __name__ == '__main__':
     with tf.device('CPU:0'):
         load_weights_from = './model_dir/fine_weights_probably_useless.h5'
         load_weights_from = './model_dir/weights_robust_lighting_texture.h5'
 
-        test_images_in_this_folder = 'D:/scoring_and_profiling/TrsSealCrest/'
-        spit_edge_maps_here = 'D:/edges_here/'
+        test_images_in_this_folder = 'D:/trs_seal/'
+        spit_edge_maps_here = 'D:/demo_edges/'
         print('WARNING REMOVING PREVIOUS EDGES IN {}'.format(spit_edge_maps_here))
         time.sleep(3)
         

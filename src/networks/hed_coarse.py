@@ -14,41 +14,34 @@ def side_branch(x, factor):
     return x
 
 
-def hed_refined(weights_file):
+def hed(weights_file):
     # Input
-    img_input = Input(shape=(480,480,3), name='input')
-
-    # Block 0
-    x = Conv2D(16, (3, 3), activation='relu', padding='same', name='block0_conv1')(img_input)
-    x = Conv2D(16, (3, 3), activation='relu', padding='same', name='block0_conv2')(x)
-    b0 = side_branch(x, 1)  # 480 480 1
-    x = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block0_pool')(x)  # 240 240 64
-
-    # Block 2
-    x = Conv2D(32, (3, 3), activation='relu', padding='same', name='block2_conv1')(x)
-    x = Conv2D(32, (3, 3), activation='relu', padding='same', name='block2_conv2')(x)
-    b2 = side_branch(x, 2)  # 480 480 1
-    x = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block2_pool')(x)  # 120 120 128
+    img_input = Input(shape=(840,840,3), name='input')
 
     # Block 1
-    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv1')(img_input)
-    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv2')(x)
+    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block1_conv1')(img_input)
+    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block1_conv2')(x)
     b1= side_branch(x, 1) # 480 480 1
     x = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block1_pool')(x) # 240 240 64
 
+    # Block 2
+    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block2_conv1')(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block2_conv2')(x)
+    b2= side_branch(x, 2) # 480 480 1
+    x = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block2_pool')(x) # 120 120 128
+
     # Block 3
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv1')(x)
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv2')(x)
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv3')(x)
-    b3= side_branch(x, 2) # 480 480 1
+    x = Conv2D(1024, (3, 3), activation='relu', padding='same', name='block3_conv1')(x)
+    x = Conv2D(1024, (3, 3), activation='relu', padding='same', name='block3_conv2')(x)
+    x = Conv2D(1024, (3, 3), activation='relu', padding='same', name='block3_conv3')(x)
+    b3= side_branch(x, 4) # 480 480 1
     x = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block3_pool')(x) # 60 60 256
 
     # fuse
-    fuse = Concatenate(axis=-1)([b0, b1, b2, b3])
+    fuse = Concatenate(axis=-1)([b1, b2, b3])
     fuse = Conv2D(1, (1,1), padding='same', use_bias=False, activation=None)(fuse) # 480 480 1
 
     # outputs
-    o0 = Activation('sigmoid', name='o0')(b0)
     o1    = Activation('sigmoid', name='o1')(b1)
     o2    = Activation('sigmoid', name='o2')(b2)
     o3    = Activation('sigmoid', name='o3')(b3)
@@ -56,7 +49,7 @@ def hed_refined(weights_file):
 
 
     # model
-    model = Model(inputs=[img_input], outputs=[o0, o1, o2, o3, ofuse])
+    model = Model(inputs=[img_input], outputs=[o1, o2, o3, ofuse])
     filepath = weights_file
     if os.path.isfile(filepath):
         load_weights_from_hdf5_group_by_name(model, filepath)

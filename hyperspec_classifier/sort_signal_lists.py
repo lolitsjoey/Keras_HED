@@ -27,7 +27,7 @@ def parse_hyperspec_lists(dir, search_string, num_segs, plot = False):
             saveHistory = saveHistory + [parsed]
         if count % num_segs == num_segs-1:
             for i in range(num_segs):
-                dictOfSegs['{} seg {}'.format(int((count + 1)/num_segs),num_segs - i)] = saveHistory[np.argsort(crit)[i]]
+                dictOfSegs['_'.join(signal.split('_')[0:3])[0:-1] + str(i)] = saveHistory[np.argsort(crit)[i]]
 
         x = list(range(0,224))
         if plot:
